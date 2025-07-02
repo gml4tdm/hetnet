@@ -3,7 +3,7 @@
 // Types
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use crate::errors::{GraphQueryingError, HetNetError};
 use crate::meta_path::MetaPath;
@@ -182,7 +182,8 @@ impl HeteroDiGraph {
 
     pub fn meta_path_subgraph(
         &self,
-        meta_paths: Vec<(String, MetaPath<String>)>) -> Result<Self, HetNetError>
+        meta_paths: Vec<(String, MetaPath<String>)>,
+        unique_nodes: bool) -> Result<Self, HetNetError>
     {
         // Convert meta paths to numerical types
         let node_types = self.metadata.node_types.iter()
@@ -204,27 +205,11 @@ impl HeteroDiGraph {
                 if !meta_path.start.matches(&node.r#type) {
                     continue;
                 }
-                for target in self.walk_meta_path(node, meta_path) {
+                for target in self.walk_meta_path(node, meta_path, unique_nodes) {
                     let src_uid = *nodes.entry(node.uid)
-                        .or_insert_with(
-                            || {
-                                let node_type = self.metadata.node_types[node.r#type].clone();
-                                let node_data = self.metadata.node_properties
-                                    .get(node.uid)
-                                    .cloned();
-                                builder.add_node(node_type, node_data)
-                            }
-                        );
+                        .or_insert_with(|| self.copy_node_to_builder(node, &mut builder));
                     let tgt_uid = *nodes.entry(target.uid)
-                        .or_insert_with(
-                            || {
-                                let node_type = self.metadata.node_types[target.r#type].clone();
-                                let node_data = self.metadata.node_properties
-                                    .get(target.uid)
-                                    .cloned();
-                                builder.add_node(node_type, node_data)
-                            }
-                        );
+                        .or_insert_with(|| self.copy_node_to_builder(target, &mut builder));
                     builder.add_edge(src_uid, tgt_uid, mp_name.clone(), None);
                 }
             }
@@ -232,14 +217,25 @@ impl HeteroDiGraph {
 
         Ok(builder.build())
     }
+    
+    fn copy_node_to_builder(&self, node: &Node, builder: &mut HeteroDiGraphBuilder) -> NodeRef {
+        let node_type = self.metadata.node_types[node.r#type].clone();
+        let node_data = self.metadata.node_properties
+            .get(node.uid)
+            .cloned();
+        builder.add_node(node_type, node_data)
+    }
 
     fn walk_meta_path<'a>(&'a self,
                           start: &'a Node,
-                          meta_path: &MetaPath<usize>) -> Vec<&'a Node> {
-        let mut stack = vec![(start, 0usize)];
+                          meta_path: &MetaPath<usize>, 
+                          unique_nodes: bool) -> Vec<&'a Node> {
+        let mut stack = vec![
+            (start, 0usize, BTreeSet::from_iter(vec![start.uid]))
+        ];
         let mut result = Vec::new();
 
-        while let Some((node, index)) = stack.pop() {
+        while let Some((node, index, mut seen)) = stack.pop() {
             if index >= meta_path.steps.len() {
                 result.push(node);
             } else {
@@ -249,10 +245,13 @@ impl HeteroDiGraph {
                         continue;
                     }
                     let new_node = &self.nodes[edge.to];
-                    if !node_type.matches(&new_node.r#type) {
+                    if !node_type.matches(&new_node.r#type) || seen.contains(&new_node.uid) {
                         continue;
                     }
-                    stack.push((new_node, index + 1));
+                    if unique_nodes {
+                        seen.insert(new_node.uid);
+                    }
+                    stack.push((new_node, index + 1, seen.clone()));
                 }
             }
         }

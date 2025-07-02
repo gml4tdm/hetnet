@@ -53,8 +53,8 @@ class Graph:
     def edge_properties(self, source: int, destination: int, kind: str) -> dict[str, str]:
         return self._graph.edge_properties(source, destination, kind)
 
-    def meta_path_subgraph(self, metapaths: dict[str, MetaPath]) -> Graph:
-        return Graph(self._graph.meta_path_subgraph(metapaths))
+    def meta_path_subgraph(self, metapaths: dict[str, MetaPath], *, unique_nodes=True) -> Graph:
+        return Graph(self._graph.meta_path_subgraph(metapaths, unique_nodes=unique_nodes))
 
     def is_undirected(self) -> bool:
         if 'is_undirected' not in self._cache:

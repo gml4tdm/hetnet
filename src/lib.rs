@@ -70,13 +70,14 @@ impl PyHeteroDiGraph {
         Ok(self.0.edge_properties(source, destination, r#type)?)
     }
     
+    #[pyo3(signature = (meta_paths, *, unique_nodes = true))]
     fn meta_path_subgraph(&self, 
-                          meta_paths: HashMap<String, PyMetaPath>) -> PyResult<Self>
+                          meta_paths: HashMap<String, PyMetaPath>, unique_nodes:  bool) -> PyResult<Self>
     {
         let meta_paths = meta_paths.into_iter()
             .map(|(name, meta_path)| (name, meta_path.0))
             .collect();
-        Ok(PyHeteroDiGraph(self.0.meta_path_subgraph(meta_paths)?))
+        Ok(PyHeteroDiGraph(self.0.meta_path_subgraph(meta_paths, unique_nodes)?))
     }
     
     fn _debug(&self) -> String {
