@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::str::FromStr;
-
+use std::sync::OnceLock;
 use crate::errors::MetaPathDefinitionError;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -12,15 +13,39 @@ use crate::errors::MetaPathDefinitionError;
 pub struct MetaPath<T> {
     pub(super) start: PathComponent<T>,
     pub(super) steps: Vec<(PathComponent<T>, PathComponent<T>)>,
+    cached_hash: OnceLock<u64>
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub(super) enum PathComponent<T> {
     Typed(T),
     Wildcard
 }
 
 impl<T: Copy> Copy for PathComponent<T> {}
+
+impl<T: Eq> PartialEq for MetaPath<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.start == other.start && self.steps == other.steps 
+    }
+}
+
+impl<T: Eq> Eq for MetaPath<T> {}
+
+impl<T: Hash> Hash for MetaPath<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        if let Some(h) = self.cached_hash.get().copied() {
+            h.hash(state);
+        } else {
+            let mut hasher = DefaultHasher::new();
+            self.start.hash(&mut hasher);
+            self.steps.hash(&mut hasher);
+            let h = hasher.finish();
+            let _ = self.cached_hash.set(h);    // Error can be safely ignored 
+            h.hash(state);
+        }
+    }
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,7 +69,7 @@ impl MetaPath<String> {
                 Ok((e_conv, v_conv))
             })
             .collect::<Result<Vec<_>, MetaPathDefinitionError>>()?;
-        Ok(MetaPath{ start, steps })
+        Ok(MetaPath{ start, steps, cached_hash: OnceLock::new() })
     }
 }
 
@@ -100,7 +125,7 @@ impl FromStr for MetaPath<String> {
             steps.push((edge_type, node_type));
             first = false;
         }
-        Ok(MetaPath { start, steps })
+        Ok(MetaPath { start, steps, cached_hash: OnceLock::new() })
     }
 }
 

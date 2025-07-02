@@ -91,10 +91,6 @@ impl PyHeteroDiGraph {
             .collect();
         Ok(PyHeteroDiGraph(self.0.meta_path_subgraph(meta_paths, unique_nodes)?))
     }
-    
-    fn _debug(&self) -> String {
-        self.0.debug()
-    }
 }
 
 #[pyclass(name = "GraphBuilder")]

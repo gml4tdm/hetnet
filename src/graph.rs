@@ -14,19 +14,23 @@ use crate::shared_types::{Edge, Node, NodeRef};
 // Types
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
 pub struct HeteroDiGraph {
     metadata: GraphMetaData,
     nodes: Vec<Node>
 }
 
-#[derive(Debug)]
 struct GraphMetaData {
+    // Node types
     node_types: Vec<String>,
+    node_types_reverse: HashMap<String, usize>,
+
+    // Edge types
     edge_types: Vec<String>,
     edge_types_reverse: HashMap<String, usize>,
+
+    // Properties
     node_properties: Vec<HashMap<String, String>>,
-    edge_properties: HashMap<(usize, Edge), HashMap<String, String>>
+    edge_properties: HashMap<(usize, Edge), HashMap<String, String>>,
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,12 +94,20 @@ impl HeteroDiGraphBuilder {
             .enumerate()
             .map(|(i, x)| (x.to_string(), i))
             .collect::<HashMap<_, _>>();
+        
+        let node_types = Self::convert_mapping(self.node_types);
+        let node_types_reverse = node_types.iter()
+            .enumerate()
+            .map(|(i, x)| (x.to_string(), i))
+            .collect::<HashMap<_, _>>();
+        
         let metadata = GraphMetaData {
-            node_types: Self::convert_mapping(self.node_types),
+            node_types,
+            node_types_reverse,
             edge_types,
             edge_types_reverse,
             node_properties: self.node_properties,
-            edge_properties: self.edge_properties
+            edge_properties: self.edge_properties,
         };
         HeteroDiGraph {
             metadata,
@@ -117,9 +129,6 @@ impl HeteroDiGraphBuilder {
 
 
 impl HeteroDiGraph {
-    pub fn debug(&self) -> String {
-        format!("{self:?}")
-    }
     
     pub fn node_list(&self) -> Vec<(NodeRef, String)> {
         let mut result = Vec::with_capacity(self.nodes.len());
@@ -143,7 +152,7 @@ impl HeteroDiGraph {
         }
         counts.into_iter()
             .map(
-                |((fr, to, kind), count)| 
+                |((fr, to, kind), count)|
                     (NodeRef(fr), NodeRef(to), kind, count)
             )
             .collect()
@@ -156,7 +165,7 @@ impl HeteroDiGraph {
     
     pub fn edge_properties(&self, 
                            NodeRef(from): NodeRef,
-                           NodeRef(to): NodeRef, 
+                           NodeRef(to): NodeRef,
                            r#type: String) -> Result<&HashMap<String, String>, GraphQueryingError> {
         if from >= self.nodes.len() {
             return Err(GraphQueryingError::InvalidNodeId{uid: from});
@@ -173,20 +182,28 @@ impl HeteroDiGraph {
             .ok_or(GraphQueryingError::NoSuchEdge {kind: r#type, src: from, tgt: to})
     }
 
+    pub(crate) fn neighbours(
+        &self,
+        NodeRef(uid): NodeRef
+    ) -> Result<impl Iterator<Item=NodeRef> + use<'_>, GraphQueryingError>
+    {
+        let node = self.nodes.get(uid)
+            .ok_or(GraphQueryingError::InvalidNodeId{uid})?;
+        let stream = node.connections.iter()
+            .map(|edge| NodeRef(edge.to));
+        Ok(stream)
+    }
+
     pub fn meta_path_subgraph(
         &self,
         meta_paths: Vec<(String, MetaPath<String>)>,
         unique_nodes: bool) -> Result<Self, HetNetError>
     {
-        // Convert meta paths to numerical types
-        let node_types = self.metadata.node_types.iter()
-            .enumerate()
-            .map(|(i, x)| (x.to_string(), i))
-            .collect::<HashMap<_, _>>();
+        // Convert meta-paths to numerical types
         let meta_paths = meta_paths.into_iter()
             .map(
-                |(name, mp)| 
-                    Ok((name, mp.resolve_types(&node_types, &self.metadata.edge_types_reverse)?))
+                |(name, mp)|
+                    Ok((name, self.resolve_meta_path(mp)?))
             )
             .collect::<Result<Vec<(String, MetaPath<usize>)>, HetNetError>>()?;
 
@@ -209,6 +226,14 @@ impl HeteroDiGraph {
         }
 
         Ok(builder.build())
+    }
+    
+    fn resolve_meta_path(&self, mp: MetaPath<String>) -> Result<MetaPath<usize>, HetNetError> {
+        let resolved = mp.resolve_types(
+            &self.metadata.node_types_reverse, 
+            &self.metadata.edge_types_reverse
+        )?;
+        Ok(resolved)
     }
     
     fn copy_node_to_builder(&self, node: &Node, builder: &mut HeteroDiGraphBuilder) -> NodeRef {
