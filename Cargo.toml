@@ -9,4 +9,5 @@ name = "_hetnet"
 crate-type = ["cdylib"]
 
 [dependencies]
+error_set = "0.8.5"
 pyo3 = "0.24.0"
