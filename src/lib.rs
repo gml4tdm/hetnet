@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
-use crate::graph::{HeteroDiGraph, HeteroDiGraphBuilder, NodeRef};
+use shared_types::NodeRef;
+use crate::graph::{HeteroDiGraph, HeteroDiGraphBuilder};
 use crate::meta_path::{MetaPath, PathComponent};
 
 pub mod graph;
 mod errors;
 pub mod meta_path;
+
+mod shared_types;
 
 
 #[pyclass(name = "MetaPath")]
@@ -51,23 +54,32 @@ struct PyHeteroDiGraph(HeteroDiGraph);
 
 #[pymethods]
 impl PyHeteroDiGraph {
-    fn node_list(&self) -> Vec<(usize, String)> {
+    fn node_list(&self) -> Vec<(PyNodeRef, String)> {
         self.0.node_list()
+            .into_iter()
+            .map(|(r, t)| (PyNodeRef(r), t))
+            .collect()
     }
     
-    fn edge_list(&self) -> Vec<(usize, usize, String, usize)> {
+    fn edge_list(&self) -> Vec<(PyNodeRef, PyNodeRef, String, usize)> {
         self.0.edge_list()
+            .into_iter()
+            .map(
+                |(from, to, kind, count)| 
+                    (PyNodeRef(from), PyNodeRef(to), kind, count)
+            )
+            .collect()
     }
     
-    fn node_properties(&self, node: usize) -> PyResult<&HashMap<String, String>> {
-        Ok(self.0.node_properties(node)?)
+    fn node_properties(&self, node: PyNodeRef) -> PyResult<&HashMap<String, String>> {
+        Ok(self.0.node_properties(node.0)?)
     }
     
     fn edge_properties(&self, 
-                       source: usize, 
-                       destination: usize,
+                       source: PyNodeRef, 
+                       destination: PyNodeRef,
                        r#type: String) -> PyResult<&HashMap<String, String>> {
-        Ok(self.0.edge_properties(source, destination, r#type)?)
+        Ok(self.0.edge_properties(source.0, destination.0, r#type)?)
     }
     
     #[pyo3(signature = (meta_paths, *, unique_nodes = true))]

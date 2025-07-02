@@ -1,12 +1,18 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
-// Types
+// Imports
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 use std::collections::{BTreeSet, HashMap};
 
 use crate::errors::{GraphQueryingError, HetNetError};
 use crate::meta_path::MetaPath;
+use crate::shared_types::{Edge, Node, NodeRef};
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// Types
+//////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 pub struct HeteroDiGraph {
@@ -23,19 +29,6 @@ struct GraphMetaData {
     edge_properties: HashMap<(usize, Edge), HashMap<String, String>>
 }
 
-#[derive(Debug, Clone)]
-struct Node {
-    uid: usize,
-    r#type: usize,
-    connections: Vec<Edge>
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-struct Edge {
-    r#type: usize,
-    to: usize,
-}
-
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Builder
@@ -50,9 +43,6 @@ pub struct HeteroDiGraphBuilder {
     node_properties: Vec<HashMap<String, String>>,
     edge_properties: HashMap<(usize, Edge), HashMap<String, String>>
 }
-
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct NodeRef(pub(super) usize);
 
 impl HeteroDiGraphBuilder {
     pub fn new() -> Self {
@@ -131,16 +121,16 @@ impl HeteroDiGraph {
         format!("{self:?}")
     }
     
-    pub fn node_list(&self) -> Vec<(usize, String)> {
+    pub fn node_list(&self) -> Vec<(NodeRef, String)> {
         let mut result = Vec::with_capacity(self.nodes.len());
         for node in self.nodes.iter() {
             let type_name = self.metadata.node_types[node.r#type].clone();
-            result.push((node.uid, type_name));
+            result.push((NodeRef(node.uid), type_name));
         }
         result
     }
 
-    pub fn edge_list(&self) -> Vec<(usize, usize, String, usize)> {
+    pub fn edge_list(&self) -> Vec<(NodeRef, NodeRef, String, usize)> {
         let mut counts = HashMap::new();
         for node in self.nodes.iter() {
             for edge in node.connections.iter() {
@@ -152,18 +142,21 @@ impl HeteroDiGraph {
             }
         }
         counts.into_iter()
-            .map(|((fr, to, kind), count)| (fr, to, kind, count))
+            .map(
+                |((fr, to, kind), count)| 
+                    (NodeRef(fr), NodeRef(to), kind, count)
+            )
             .collect()
     }
     
-    pub fn node_properties(&self, uid: usize) -> Result<&HashMap<String, String>, GraphQueryingError> {
+    pub fn node_properties(&self, NodeRef(uid): NodeRef) -> Result<&HashMap<String, String>, GraphQueryingError> {
         self.metadata.node_properties.get(uid)
-            .ok_or_else(|| GraphQueryingError::InvalidNodeId{uid})
+            .ok_or(GraphQueryingError::InvalidNodeId{uid})
     }
     
     pub fn edge_properties(&self, 
-                           from: usize,
-                           to: usize, 
+                           NodeRef(from): NodeRef,
+                           NodeRef(to): NodeRef, 
                            r#type: String) -> Result<&HashMap<String, String>, GraphQueryingError> {
         if from >= self.nodes.len() {
             return Err(GraphQueryingError::InvalidNodeId{uid: from});
@@ -177,7 +170,7 @@ impl HeteroDiGraph {
         
         let key = (from, Edge { to, r#type: type_id });
         self.metadata.edge_properties.get(&key)
-            .ok_or_else(|| GraphQueryingError::NoSuchEdge {kind: r#type, src: from, tgt: to})
+            .ok_or(GraphQueryingError::NoSuchEdge {kind: r#type, src: from, tgt: to})
     }
 
     pub fn meta_path_subgraph(
