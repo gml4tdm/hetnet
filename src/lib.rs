@@ -10,7 +10,7 @@ mod errors;
 pub mod meta_path;
 
 mod shared_types;
-
+mod walker;
 
 #[pyclass(name = "MetaPath")]
 #[derive(Clone)]
