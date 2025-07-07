@@ -3,7 +3,7 @@
 // Imports
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::errors::HetNetError;
 use crate::shared_types::NodeRef;
@@ -130,5 +130,22 @@ impl<G: GraphExplorer, N: NeighbourSelector> RandomWalker<G, N> {
         }
 
         Ok(path)
+    }
+
+    pub fn distribution(&mut self,
+                        start: NodeRef,
+                        n_iter: usize) -> Result<HashMap<NodeRef, usize>, HetNetError>
+    {
+        let mut dist = HashMap::new();
+
+        for _ in 0..n_iter {
+            let path = self.walk_from(start)?;
+            let unique = path.iter().copied().collect::<HashSet<_>>();
+            for node in unique {
+                dist.entry(node).and_modify(|x| *x += 1).or_insert(1);
+            }
+        }
+
+        Ok(dist)
     }
 }

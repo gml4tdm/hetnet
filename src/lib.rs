@@ -1,9 +1,15 @@
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// Imports and modules
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
 use std::collections::HashMap;
-use pyo3::exceptions::PyException;
+use pyo3::exceptions::{PyException, PyValueError};
 use pyo3::prelude::*;
 use shared_types::NodeRef;
 use crate::graph::{HeteroDiGraph, HeteroDiGraphBuilder};
 use crate::meta_path::{MetaPath, PathComponent};
+use crate::walker::{GraphExplorer, NeighbourSelector, RandomWalkConfig, RandomWalker, UnweightedNeighbourSelector, WeightedNeighbourSelector};
 
 pub mod graph;
 mod errors;
@@ -11,6 +17,11 @@ pub mod meta_path;
 
 mod shared_types;
 mod walker;
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// Meta-path
+//////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[pyclass(name = "MetaPath")]
 #[derive(Clone)]
@@ -48,6 +59,11 @@ fn _format_mp_edge(e: &PathComponent<String>) -> String {
     }
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// Graph Object
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #[pyclass(name = "Graph")]
 struct PyHeteroDiGraph(HeteroDiGraph);
@@ -60,38 +76,174 @@ impl PyHeteroDiGraph {
             .map(|(r, t)| (PyNodeRef(r), t))
             .collect()
     }
-    
+
     fn edge_list(&self) -> Vec<(PyNodeRef, PyNodeRef, String, usize)> {
         self.0.edge_list()
             .into_iter()
             .map(
-                |(from, to, kind, count)| 
+                |(from, to, kind, count)|
                     (PyNodeRef(from), PyNodeRef(to), kind, count)
             )
             .collect()
     }
-    
+
     fn node_properties(&self, node: PyNodeRef) -> PyResult<&HashMap<String, String>> {
         Ok(self.0.node_properties(node.0)?)
     }
-    
-    fn edge_properties(&self, 
-                       source: PyNodeRef, 
+
+    fn edge_properties(&self,
+                       source: PyNodeRef,
                        destination: PyNodeRef,
                        r#type: String) -> PyResult<&HashMap<String, String>> {
         Ok(self.0.edge_properties(source.0, destination.0, r#type)?)
     }
-    
+
     #[pyo3(signature = (meta_paths, *, unique_nodes = true))]
-    fn meta_path_subgraph(&self, 
-                          meta_paths: HashMap<String, PyMetaPath>, unique_nodes:  bool) -> PyResult<Self>
+    fn meta_path_subgraph(&self,
+                          meta_paths: HashMap<String, PyMetaPath>, unique_nodes: bool) -> PyResult<Self>
     {
         let meta_paths = meta_paths.into_iter()
             .map(|(name, meta_path)| (name, meta_path.0))
             .collect();
         Ok(PyHeteroDiGraph(self.0.meta_path_subgraph(meta_paths, unique_nodes)?))
     }
+
+    #[pyo3(signature = (start, *, weighted = true, path_length = 10))]
+    fn random_walk(&mut self, start: PyNodeRef, weighted: bool, path_length: usize) -> PyResult<Vec<PyNodeRef>> {
+        self.random_walk_helper(start, weighted, path_length, self.0.neighbours())
+    }
+
+    #[pyo3(signature = (start, meta_paths, *, weighted = true, path_length = 10))]
+    fn meta_path_random_walk(&mut self,
+                             start: PyNodeRef,
+                             meta_paths: Vec<PyMetaPath>,
+                             weighted: bool,
+                             path_length: usize) -> PyResult<Vec<PyNodeRef>>
+    {
+        if meta_paths.is_empty() {
+            return Err(PyErr::new::<PyValueError, _>("List of meta-paths must be non-empty"));
+        }
+        let meta_paths = meta_paths.into_iter()
+            .map(|py_mp| py_mp.0)
+            .collect();
+        let explorer = self.0.meta_path_neighbours(meta_paths)?;
+        self.random_walk_helper(start, weighted, path_length, explorer)
+    }
+
+    #[pyo3(signature = (start, *, weighted = true, path_length = 10, n_iter = 100))]
+    fn random_walk_distribution(&mut self,
+                                start: PyNodeRef,
+                                weighted: bool,
+                                path_length: usize,
+                                n_iter: usize) -> PyResult<HashMap<PyNodeRef, usize>> {
+        self.random_walk_dist_helper(start, weighted, path_length, self.0.neighbours(), n_iter)
+    }
+
+    #[pyo3(signature = (start, meta_paths, *, weighted = true, path_length = 10, n_iter = 100))]
+    fn meta_path_random_walk_distribution(&mut self,
+                                          start: PyNodeRef,
+                                          meta_paths: Vec<PyMetaPath>,
+                                          weighted: bool,
+                                          path_length: usize,
+                                          n_iter: usize) -> PyResult<HashMap<PyNodeRef, usize>>
+    {
+        if meta_paths.is_empty() {
+            return Err(PyErr::new::<PyValueError, _>("List of meta-paths must be non-empty"));
+        }
+        let meta_paths = meta_paths.into_iter()
+            .map(|py_mp| py_mp.0)
+            .collect();
+        let explorer = self.0.meta_path_neighbours(meta_paths)?;
+        self.random_walk_dist_helper(start, weighted, path_length, explorer, n_iter)
+    }
 }
+
+impl PyHeteroDiGraph {
+    fn random_walk_helper<T>(&self,
+                             start: PyNodeRef,
+                             weighted: bool,
+                             path_length: usize,
+                             explorer: T) -> PyResult<Vec<PyNodeRef>>
+    where
+        T: GraphExplorer,
+    {
+        if weighted {
+            self.random_walk_helper_2(
+                start, path_length, explorer, UnweightedNeighbourSelector::default()
+            )
+        } else {
+            self.random_walk_helper_2(
+                start, path_length, explorer, WeightedNeighbourSelector::default()
+            )
+        }
+    }
+
+    fn random_walk_helper_2<T, R>(&self,
+                                  start: PyNodeRef,
+                                  path_length: usize,
+                                  explorer: T,
+                                  selector: R) -> PyResult<Vec<PyNodeRef>>
+    where
+        T: GraphExplorer,
+        R: NeighbourSelector
+    {
+        let mut walker = RandomWalker::new(
+            explorer,
+            selector,
+            RandomWalkConfig::default()
+                .with_path_length(path_length)
+        );
+        let path = walker.walk_from(start.0)?;
+        Ok(path.into_iter().map(PyNodeRef).collect())
+    }
+
+    fn random_walk_dist_helper<T>(&self,
+                                  start: PyNodeRef,
+                                  weighted: bool,
+                                  path_length: usize,
+                                  explorer: T,
+                                  n_iter: usize) -> PyResult<HashMap<PyNodeRef, usize>>
+    where
+        T: GraphExplorer,
+    {
+        if weighted {
+            self.random_walk_dist_helper_2(
+                start, path_length, explorer, UnweightedNeighbourSelector::default(), n_iter
+            )
+        } else {
+            self.random_walk_dist_helper_2(
+                start, path_length, explorer, WeightedNeighbourSelector::default(), n_iter
+            )
+        }
+    }
+
+    fn random_walk_dist_helper_2<T, R>(&self,
+                                       start: PyNodeRef,
+                                       path_length: usize,
+                                       explorer: T,
+                                       selector: R,
+                                       n_iter: usize) -> PyResult<HashMap<PyNodeRef, usize>>
+    where
+        T: GraphExplorer,
+        R: NeighbourSelector
+    {
+        let mut walker = RandomWalker::new(
+            explorer,
+            selector,
+            RandomWalkConfig::default()
+                .with_path_length(path_length)
+        );
+        let dist = walker.distribution(start.0, n_iter)?;
+        Ok(
+            dist.into_iter().map(|(k, v)| (PyNodeRef(k), v)).collect()
+        )
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// Graph Builder
+//////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[pyclass(name = "GraphBuilder")]
 struct PyHeteroDiGraphBuilder(HeteroDiGraphBuilder, bool);
@@ -139,8 +291,13 @@ impl PyHeteroDiGraphBuilder {
     }
 }
 
-#[pyclass(name = "NodeRef")]
-#[derive(Copy, Clone)]
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// Node Ref
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[pyclass(name = "NodeRef", eq, hash, frozen)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 struct PyNodeRef(NodeRef);
 
 #[pymethods]
@@ -150,6 +307,10 @@ impl PyNodeRef {
     }
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// Module entry point
+//////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A Python module implemented in Rust.
 #[pymodule]
