@@ -37,24 +37,76 @@ class GraphBuilder:
 
 class Graph:
 
-    def __init__(self, base_graph: _hetnet.Graph):
+    def __init__(self,
+                 base_graph: _hetnet.Graph, *,
+                 index: str | list[str] | None = None):
         self._graph = base_graph
         self._cache = {}
+        if index is None:
+            self._index = _GraphIndex(mapping={}, key=())
+        else:
+            keys = [index] if isinstance(index, str) else index
+            mapping = {}
+            for ref, _ in self._graph.node_list():
+                properties = self._graph.node_properties(ref)
+                node_key = tuple(properties[k] for k in keys)
+                if node_key in mapping:
+                    raise ValueError(f'Key {keys} is not unique')
+                mapping[node_key] = ref
+            self._index = _GraphIndex(mapping=mapping, key=tuple(keys))
 
-    def node_list(self) -> list[tuple[int, str]]:
+    @property
+    def index(self) -> _GraphIndex:
+        return self._index
+
+    def node_list(self) -> list[tuple[NodeRef, str]]:
         return self._graph.node_list()
 
-    def edge_list(self) -> list[tuple[int, int, str, int]]:
+    def edge_list(self) -> list[tuple[NodeRef, NodeRef, str, int]]:
         return self._graph.edge_list()
 
-    def node_properties(self, node: int) -> dict[str, str]:
+    def node_properties(self, node: NodeRef) -> dict[str, str]:
         return self._graph.node_properties(node)
 
-    def edge_properties(self, source: int, destination: int, kind: str) -> dict[str, str]:
+    def edge_properties(self, source: NodeRef, destination: NodeRef, kind: str) -> dict[str, str]:
         return self._graph.edge_properties(source, destination, kind)
 
     def meta_path_subgraph(self, metapaths: dict[str, MetaPath], *, unique_nodes=True) -> Graph:
         return Graph(self._graph.meta_path_subgraph(metapaths, unique_nodes=unique_nodes))
+
+    def random_walk(self,
+                    start: NodeRef, *,
+                    weighted: bool = True,
+                    path_length: int = 10) -> list[NodeRef]:
+        return self._graph.random_walk(start, weighted=weighted, path_length=path_length)
+
+    def meta_path_random_walk(self,
+                              start: NodeRef,
+                              meta_paths: list[MetaPath], *,
+                              weighted: bool = True,
+                              path_length: int = 10) -> list[NodeRef]:
+        return self._graph.meta_path_random_walk(
+            start, meta_paths, weighted=weighted, path_length=path_length
+        )
+
+    def random_walk_distribution(self,
+                                 start: NodeRef, *,
+                                 weighted: bool = True,
+                                 path_length: int = 10,
+                                 n_iter: int = 100) -> dict[NodeRef, int]:
+        return self._graph.random_walk_distribution(
+            start, weighted=weighted, path_length=path_length, n_iter=n_iter
+        )
+
+    def meta_path_random_walk_distribution(self,
+                                           start: NodeRef,
+                                           meta_paths: list[MetaPath], *,
+                                           weighted: bool = True,
+                                           path_length: int = 10,
+                                           n_iter: int = 100) -> dict[NodeRef, int]:
+        return self._graph.meta_path_random_walk_distribution(
+            start, meta_paths, weighted=weighted, path_length=path_length, n_iter=n_iter
+        )
 
     def is_undirected(self) -> bool:
         if 'is_undirected' not in self._cache:
@@ -88,3 +140,19 @@ class Graph:
             for fr, to, kind, count in self.edge_list():
                 graph.edge(str(fr), str(to), label=f'{kind} ({count})')
             return graph
+
+
+class _GraphIndex:
+
+    def __init__(self, *, mapping: dict[tuple[str, ...], NodeRef], key: tuple[str, ...]):
+        self._mapping = mapping
+        self._key = key
+
+    def __getitem__(self, key: str | list[str] | dict[str, str]):
+        if isinstance(key, str):
+            key = [key]
+        if isinstance(key, dict):
+            if set(key) != set(self._key):
+                raise ValueError(f'Expected key fields {self._key}, got {tuple(key)}')
+            key = [key[x] for x in self._key]
+        return self._mapping[tuple(key)]
