@@ -42,7 +42,8 @@ class Graph:
                               start: NodeRef,
                               meta_paths: list[MetaPath], *,
                               weighted: bool = True,
-                              path_length: int = 10) -> list[NodeRef]:
+                              path_length: int = 10, 
+                              unique_nodes: bool = True,) -> list[NodeRef]:
         ...
     def random_walk_distribution(self,
                                  start: NodeRef, *,
@@ -55,6 +56,7 @@ class Graph:
                                            meta_paths: list[MetaPath], *,
                                            weighted: bool = True,
                                            path_length: int = 10,
+                                           unique_nodes: bool = True,
                                            n_iter: int = 100) -> dict[NodeRef, int]:
         ...
 

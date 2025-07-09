@@ -113,12 +113,13 @@ impl PyHeteroDiGraph {
         self.random_walk_helper(start, weighted, path_length, self.0.neighbours())
     }
 
-    #[pyo3(signature = (start, meta_paths, *, weighted = true, path_length = 10))]
+    #[pyo3(signature = (start, meta_paths, *, weighted = true, path_length = 10, unique_nodes = true))]
     fn meta_path_random_walk(&mut self,
                              start: PyNodeRef,
                              meta_paths: Vec<PyMetaPath>,
                              weighted: bool,
-                             path_length: usize) -> PyResult<Vec<PyNodeRef>>
+                             path_length: usize, 
+                             unique_nodes: bool) -> PyResult<Vec<PyNodeRef>>
     {
         if meta_paths.is_empty() {
             return Err(PyErr::new::<PyValueError, _>("List of meta-paths must be non-empty"));
@@ -126,7 +127,7 @@ impl PyHeteroDiGraph {
         let meta_paths = meta_paths.into_iter()
             .map(|py_mp| py_mp.0)
             .collect();
-        let explorer = self.0.meta_path_neighbours(meta_paths)?;
+        let explorer = self.0.meta_path_neighbours(meta_paths, unique_nodes)?;
         self.random_walk_helper(start, weighted, path_length, explorer)
     }
 
@@ -139,12 +140,15 @@ impl PyHeteroDiGraph {
         self.random_walk_dist_helper(start, weighted, path_length, self.0.neighbours(), n_iter)
     }
 
-    #[pyo3(signature = (start, meta_paths, *, weighted = true, path_length = 10, n_iter = 100))]
+    #[pyo3(signature = (
+        start, meta_paths, *, weighted = true, path_length = 10, unique_nodes = true, n_iter = 100)
+    )]
     fn meta_path_random_walk_distribution(&mut self,
                                           start: PyNodeRef,
                                           meta_paths: Vec<PyMetaPath>,
                                           weighted: bool,
                                           path_length: usize,
+                                          unique_nodes: bool,
                                           n_iter: usize) -> PyResult<HashMap<PyNodeRef, usize>>
     {
         if meta_paths.is_empty() {
@@ -153,7 +157,7 @@ impl PyHeteroDiGraph {
         let meta_paths = meta_paths.into_iter()
             .map(|py_mp| py_mp.0)
             .collect();
-        let explorer = self.0.meta_path_neighbours(meta_paths)?;
+        let explorer = self.0.meta_path_neighbours(meta_paths, unique_nodes)?;
         self.random_walk_dist_helper(start, weighted, path_length, explorer, n_iter)
     }
 }

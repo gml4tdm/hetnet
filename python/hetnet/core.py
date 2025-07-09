@@ -31,8 +31,8 @@ class GraphBuilder:
                  properties: dict[str, str] | None = None):
         self._builder.add_edge(source, destination, kind, properties=properties)
 
-    def build(self) -> Graph:
-        return Graph(self._builder.build())
+    def build(self, index: str | list[str] | None = None) -> Graph:
+        return Graph(self._builder.build(), index=index)
 
 
 class Graph:
@@ -71,8 +71,14 @@ class Graph:
     def edge_properties(self, source: NodeRef, destination: NodeRef, kind: str) -> dict[str, str]:
         return self._graph.edge_properties(source, destination, kind)
 
-    def meta_path_subgraph(self, metapaths: dict[str, MetaPath], *, unique_nodes=True) -> Graph:
-        return Graph(self._graph.meta_path_subgraph(metapaths, unique_nodes=unique_nodes))
+    def meta_path_subgraph(self,
+                           metapaths: dict[str, MetaPath], *,
+                           unique_nodes=True,
+                           index: str | list[str] | None = None) -> Graph:
+        return Graph(
+            self._graph.meta_path_subgraph(metapaths, unique_nodes=unique_nodes),
+            index=index
+        )
 
     def random_walk(self,
                     start: NodeRef, *,
@@ -84,9 +90,10 @@ class Graph:
                               start: NodeRef,
                               meta_paths: list[MetaPath], *,
                               weighted: bool = True,
-                              path_length: int = 10) -> list[NodeRef]:
+                              path_length: int = 10,
+                              unique_nodes: bool = True) -> list[NodeRef]:
         return self._graph.meta_path_random_walk(
-            start, meta_paths, weighted=weighted, path_length=path_length
+            start, meta_paths, weighted=weighted, path_length=path_length, unique_nodes=unique_nodes
         )
 
     def random_walk_distribution(self,
@@ -103,9 +110,10 @@ class Graph:
                                            meta_paths: list[MetaPath], *,
                                            weighted: bool = True,
                                            path_length: int = 10,
+                                           unique_nodes: bool = True,
                                            n_iter: int = 100) -> dict[NodeRef, int]:
         return self._graph.meta_path_random_walk_distribution(
-            start, meta_paths, weighted=weighted, path_length=path_length, n_iter=n_iter
+            start, meta_paths, weighted=weighted, path_length=path_length, unique_nodes=unique_nodes, n_iter=n_iter
         )
 
     def is_undirected(self) -> bool:
@@ -126,7 +134,9 @@ class Graph:
             seen = set()
             graph = graphviz.Graph()
             for uid, kind in self.node_list():
-                graph.node(str(uid), label=kind)
+                properties = self.node_properties(uid)
+                key = ','.join(f'{k}={properties[k]}' for k in self._index._key)
+                graph.node(str(uid), label=f'{kind} ({key})')
             for fr, to, kind, count in self.edge_list():
                 if (to, fr, kind) in seen:
                     continue

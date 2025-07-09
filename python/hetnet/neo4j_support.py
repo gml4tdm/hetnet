@@ -7,7 +7,8 @@ from .core import Graph, GraphBuilder
 
 def load_graph(uri: str, *,
                auth: tuple[str, str] | None = None,
-               directed: bool = True) -> Graph:
+               directed: bool = True,
+               index=None) -> Graph:
     with neo4j.GraphDatabase.driver(uri, auth=auth) as driver:
         records, _, _ = driver.execute_query(
             """MATCH (n) OPTIONAL MATCH (n)-[r]-(m) 
@@ -38,7 +39,7 @@ def load_graph(uri: str, *,
                         rel.type,
                         properties=_convert_properties(rel)
                     )
-    return builder.build()
+    return builder.build(index=index)
 
 
 def _convert_properties(x):

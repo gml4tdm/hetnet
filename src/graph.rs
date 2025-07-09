@@ -39,6 +39,7 @@ pub(crate) struct Neighbours<'a> {
 
 pub(crate) struct MetaPathNeighbours<'a> {
     graph: &'a HeteroDiGraph,
+    unique_nodes: bool,
     meta_paths: Vec<MetaPath<usize>>
 }
 
@@ -167,10 +168,10 @@ impl<'a> walker::GraphExplorer for MetaPathNeighbours<'a> {
 
         for meta_path in self.meta_paths.iter() {
             let mut stack = vec![
-                (start, 0usize)
+                (start, 0usize, BTreeSet::from_iter(vec![start.uid]))
             ];
 
-            while let Some((node, index)) = stack.pop() {
+            while let Some((node, index, seen)) = stack.pop() {
                 if index >= meta_path.steps.len() {
                     result.entry(NodeRef(node.uid)).and_modify(|x| *x += 1).or_insert(1);
                 } else {
@@ -180,10 +181,14 @@ impl<'a> walker::GraphExplorer for MetaPathNeighbours<'a> {
                             continue;
                         }
                         let new_node = &self.graph.nodes[edge.to];
-                        if !node_type.matches(&new_node.r#type) {
+                        if !node_type.matches(&new_node.r#type) || seen.contains(&new_node.uid) {
                             continue;
                         }
-                        stack.push((new_node, index + 1));
+                        let mut seen_for_edge = seen.clone();
+                        if self.unique_nodes {
+                            seen_for_edge.insert(new_node.uid);
+                        }
+                        stack.push((new_node, index + 1, seen_for_edge));
                     }
                 }
             }
@@ -260,13 +265,14 @@ impl HeteroDiGraph {
 
     pub(crate) fn meta_path_neighbours(
         &self,
-        meta_paths: Vec<MetaPath<String>>
+        meta_paths: Vec<MetaPath<String>>,
+        unique_nodes: bool
     ) -> Result<MetaPathNeighbours, HetNetError>
     {
         let resolved = meta_paths.into_iter()
             .map(|mp| self.resolve_meta_path(mp))
             .collect::<Result<Vec<_>, HetNetError>>()?;
-        Ok(MetaPathNeighbours { graph: self, meta_paths: resolved })
+        Ok(MetaPathNeighbours { graph: self, meta_paths: resolved, unique_nodes })
     }
 
     pub fn meta_path_subgraph(
@@ -328,7 +334,7 @@ impl HeteroDiGraph {
         ];
         let mut result = Vec::new();
 
-        while let Some((node, index, mut seen)) = stack.pop() {
+        while let Some((node, index, seen)) = stack.pop() {
             if index >= meta_path.steps.len() {
                 result.push(node);
             } else {
@@ -341,10 +347,11 @@ impl HeteroDiGraph {
                     if !node_type.matches(&new_node.r#type) || seen.contains(&new_node.uid) {
                         continue;
                     }
+                    let mut seen_for_edge = seen.clone();
                     if unique_nodes {
-                        seen.insert(new_node.uid);
+                        seen_for_edge.insert(new_node.uid);
                     }
-                    stack.push((new_node, index + 1, seen.clone()));
+                    stack.push((new_node, index + 1, seen_for_edge));
                 }
             }
         }
