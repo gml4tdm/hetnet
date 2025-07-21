@@ -14,6 +14,9 @@ except ImportError as e:
 
 MetaPath = _hetnet.MetaPath
 NodeRef = _hetnet.NodeRef
+EdgeRef = _hetnet.EdgeRef
+NodeDescriptor = _hetnet.NodeDescriptor
+EdgeDescriptor = _hetnet.EdgeDescriptor
 
 
 class GraphBuilder:
@@ -28,8 +31,11 @@ class GraphBuilder:
                  source: NodeRef,
                  destination: NodeRef,
                  kind: str, *,
+                 weight: float = 1.0,
                  properties: dict[str, str] | None = None):
-        self._builder.add_edge(source, destination, kind, properties=properties)
+        self._builder.add_edge(
+            source, destination, kind, weight=weight, properties=properties
+        )
 
     def build(self, index: str | list[str] | None = None) -> Graph:
         return Graph(self._builder.build(), index=index)
@@ -42,12 +48,14 @@ class Graph:
                  index: str | list[str] | None = None):
         self._graph = base_graph
         self._cache = {}
+        self._raw_index = index
         if index is None:
             self._index = _GraphIndex(mapping={}, key=())
         else:
             keys = [index] if isinstance(index, str) else index
             mapping = {}
-            for ref, _ in self._graph.node_list():
+            for descriptor in self._graph.node_list():
+                ref = descriptor.uid
                 properties = self._graph.node_properties(ref)
                 node_key = tuple(properties[k] for k in keys)
                 if node_key in mapping:
@@ -59,17 +67,20 @@ class Graph:
     def index(self) -> _GraphIndex:
         return self._index
 
-    def node_list(self) -> list[tuple[NodeRef, str]]:
+    def node_list(self) -> list[NodeDescriptor]:
         return self._graph.node_list()
 
-    def edge_list(self) -> list[tuple[NodeRef, NodeRef, str, int]]:
+    def edge_list(self) -> list[EdgeDescriptor]:
         return self._graph.edge_list()
 
     def node_properties(self, node: NodeRef) -> dict[str, str]:
         return self._graph.node_properties(node)
 
-    def edge_properties(self, source: NodeRef, destination: NodeRef, kind: str) -> dict[str, str]:
-        return self._graph.edge_properties(source, destination, kind)
+    def edge_properties(self, edge: EdgeRef) -> dict[str, str]:
+        return self._graph.edge_properties(edge)
+
+    def deduplicate_edges(self, *types: str) -> Graph:
+        return Graph(self._graph.deduplicate_edges(list(types)), index=self._raw_index)
 
     def meta_path_subgraph(self,
                            metapaths: dict[str, MetaPath], *,
@@ -116,40 +127,28 @@ class Graph:
             start, meta_paths, weighted=weighted, path_length=path_length, unique_nodes=unique_nodes, n_iter=n_iter
         )
 
-    def is_undirected(self) -> bool:
-        if 'is_undirected' not in self._cache:
-            counts = {}
-            for fr, to, kind, count in self.edge_list():
-                if (to, fr, kind) in counts:
-                    counts[(to, fr, kind)] -= count
-                else:
-                    counts[(fr, to, kind)] = count
-            self._cache['is_undirected'] = all(
-                x == 0 for x in counts.values()
-            )
-        return self._cache['is_undirected']
-
-    def to_dot_graph(self, merge_bidirectional: bool = False):
-        if self.is_undirected() and merge_bidirectional:
-            seen = set()
-            graph = graphviz.Graph()
-            for uid, kind in self.node_list():
-                properties = self.node_properties(uid)
-                key = ','.join(f'{k}={properties[k]}' for k in self._index._key)
-                graph.node(str(uid), label=f'{kind} ({key})')
-            for fr, to, kind, count in self.edge_list():
-                if (to, fr, kind) in seen:
-                    continue
-                seen.add((fr, to, kind))
-                graph.edge(str(fr), str(to), label=f'{kind} ({count})')
-            return graph
+    def to_dot_graph(self, *, aggregated_edges: bool = True):
+        graph = graphviz.Digraph()
+        for uid, kind in self.node_list():
+            graph.node(str(uid), label=kind)
+        if aggregated_edges:
+            agg = collections.defaultdict(float)
+            for descriptor in self.edge_list():
+                fr = descriptor.source
+                to = descriptor.destination
+                kind = descriptor.type
+                count = descriptor.weight
+                agg[(fr, to, kind)] += count
+            for fr, to, kind in agg:
+                graph.edge(str(fr), str(to), label=f'{kind} ({agg[(fr, to, kind)]})')
         else:
-            graph = graphviz.Digraph()
-            for uid, kind in self.node_list():
-                graph.node(str(uid), label=kind)
-            for fr, to, kind, count in self.edge_list():
+            for descriptor in self.edge_list():
+                fr = descriptor.source
+                to = descriptor.destination
+                kind = descriptor.type
+                count = descriptor.weight
                 graph.edge(str(fr), str(to), label=f'{kind} ({count})')
-            return graph
+        return graph
 
 
 class _GraphIndex:

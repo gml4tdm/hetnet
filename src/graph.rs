@@ -3,10 +3,11 @@
 // Imports
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
+
 use crate::errors::{GraphQueryingError, HetNetError};
 use crate::meta_path::MetaPath;
-use crate::shared_types::{Edge, Node, NodeRef};
+use crate::shared_types::{Edge, EdgeDescriptor, EdgeRef, Node, NodeDescriptor, NodeRef};
 use crate::walker;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,7 +31,7 @@ struct GraphMetaData {
 
     // Properties
     node_properties: Vec<HashMap<String, String>>,
-    edge_properties: HashMap<(usize, Edge), HashMap<String, String>>,
+    edge_properties: Vec<HashMap<String, String>>
 }
 
 pub(crate) struct Neighbours<'a> {
@@ -55,14 +56,17 @@ pub struct HeteroDiGraphBuilder {
     node_types: HashMap<String, usize>,
     edge_types: HashMap<String, usize>,
     node_properties: Vec<HashMap<String, String>>,
-    edge_properties: HashMap<(usize, Edge), HashMap<String, String>>
+    edge_properties: Vec<HashMap<String, String>>,
+    next_edge_id: usize
 }
 
 impl HeteroDiGraphBuilder {
     pub fn new() -> Self {
-        Self::default()
+        let mut s = Self::default();
+        s.next_edge_id = 0;
+        s
     }
-    
+
     pub fn add_node(&mut self,
                     r#type: String,
                     properties: Option<HashMap<String, String>>) -> NodeRef {
@@ -79,38 +83,44 @@ impl HeteroDiGraphBuilder {
         self.node_properties.push(properties.unwrap_or_default());
         NodeRef(uid)
     }
-    
+
     pub fn add_edge(&mut self,
-                    from: NodeRef, 
-                    to: NodeRef, 
-                    r#type: String, 
+                    from: NodeRef,
+                    to: NodeRef,
+                    r#type: String,
+                    weight: Option<f64>,
                     properties: Option<HashMap<String, String>>) {
         let next_type_id = self.edge_types.len();
         let type_id = *self.edge_types
             .entry(r#type.clone())
             .or_insert(next_type_id);
-        let edge = Edge{r#type: type_id, to: to.0};
+        let edge = Edge{
+            r#type: type_id, 
+            to: to.0, 
+            weight: weight.unwrap_or(1.0),
+            uid: self.next_edge_id
+        };
+        self.next_edge_id += 1; 
         self.nodes.get_mut(from.0)
             .expect("Invalid node reference")
             .connections
             .push(edge);
-        let key = (from.0, edge);
-        self.edge_properties.insert(key, properties.unwrap_or_default());
+        self.edge_properties.push(properties.unwrap_or_default());
     }
-    
+
     pub fn build(self) -> HeteroDiGraph {
         let edge_types = Self::convert_mapping(self.edge_types);
         let edge_types_reverse = edge_types.iter()
             .enumerate()
             .map(|(i, x)| (x.to_string(), i))
             .collect::<HashMap<_, _>>();
-        
+
         let node_types = Self::convert_mapping(self.node_types);
         let node_types_reverse = node_types.iter()
             .enumerate()
             .map(|(i, x)| (x.to_string(), i))
             .collect::<HashMap<_, _>>();
-        
+
         let metadata = GraphMetaData {
             node_types,
             node_types_reverse,
@@ -124,7 +134,7 @@ impl HeteroDiGraphBuilder {
             nodes: self.nodes,
         }
     }
-    
+
     fn convert_mapping(m: HashMap<String, usize>) -> Vec<String> {
         let mut as_vec = m.into_iter().collect::<Vec<_>>();
         as_vec.sort_by_key(|x| x.1);
@@ -206,57 +216,83 @@ impl<'a> walker::GraphExplorer for MetaPathNeighbours<'a> {
 
 
 impl HeteroDiGraph {
-    
-    pub fn node_list(&self) -> Vec<(NodeRef, String)> {
+
+    pub fn node_list(&self) -> Vec<NodeDescriptor> {
         let mut result = Vec::with_capacity(self.nodes.len());
         for node in self.nodes.iter() {
             let type_name = self.metadata.node_types[node.r#type].clone();
-            result.push((NodeRef(node.uid), type_name));
+            result.push(NodeDescriptor { 
+                uid: NodeRef(node.uid),
+                r#type: type_name,
+            });
         }
         result
     }
 
-    pub fn edge_list(&self) -> Vec<(NodeRef, NodeRef, String, usize)> {
-        let mut counts = HashMap::new();
+    pub fn edge_list(&self) -> Vec<EdgeDescriptor> {
+        let mut result = Vec::new();
         for node in self.nodes.iter() {
             for edge in node.connections.iter() {
                 let type_name = self.metadata.edge_types[edge.r#type].clone();
-                let key = (node.uid, edge.to, type_name);
-                counts.entry(key).
-                    and_modify(|x| *x += 1).
-                    or_insert(1);
+                result.push(EdgeDescriptor {
+                    uid: EdgeRef(edge.uid),
+                    from: NodeRef(node.uid),
+                    to: NodeRef(edge.to),
+                    r#type: type_name,
+                    weight: edge.weight
+                })
             }
         }
-        counts.into_iter()
-            .map(
-                |((fr, to, kind), count)|
-                    (NodeRef(fr), NodeRef(to), kind, count)
-            )
-            .collect()
+        result 
     }
-    
+
     pub fn node_properties(&self, NodeRef(uid): NodeRef) -> Result<&HashMap<String, String>, GraphQueryingError> {
         self.metadata.node_properties.get(uid)
             .ok_or(GraphQueryingError::InvalidNodeId{uid})
     }
-    
-    pub fn edge_properties(&self, 
-                           NodeRef(from): NodeRef,
-                           NodeRef(to): NodeRef,
-                           r#type: String) -> Result<&HashMap<String, String>, GraphQueryingError> {
-        if from >= self.nodes.len() {
-            return Err(GraphQueryingError::InvalidNodeId{uid: from});
+
+    pub fn edge_properties(&self, EdgeRef(uid): EdgeRef) -> Result<&HashMap<String, String>, GraphQueryingError> {
+        self.metadata.edge_properties.get(uid)
+            .ok_or(GraphQueryingError::InvalidEdgeId{uid})
+    }
+
+    pub fn deduplicate_edges(&self, types: Vec<String>) -> Result<Self, HetNetError> {
+        // Build the new graph
+        let mut nodes = HashMap::new();
+        let mut builder = HeteroDiGraphBuilder::new();
+        for node in self.nodes.iter() {
+            let uid = builder.add_node(
+                self.metadata.node_types[node.r#type].clone(),
+                self.metadata.node_properties.get(node.uid).cloned()
+            );
+            nodes.insert(node.uid, uid);
         }
-        if to >= self.nodes.len() {
-            return Err(GraphQueryingError::InvalidNodeId{uid: to});
+        let dedup = types.into_iter()
+            .map(|tp|
+                self.metadata.edge_types_reverse.get(&tp).copied()
+                    .ok_or_else(|| HetNetError::UnknownType {kind: "edge".to_string(), name: tp})
+            )
+            .collect::<Result<HashSet<_>, _>>()?;
+        let mut seen_edges = HashSet::new();
+        for node in self.nodes.iter() {
+            for edge in node.connections.iter() {
+                let key = (node.uid, edge.to, edge.r#type);
+                if dedup.contains(&edge.r#type) {
+                    if seen_edges.contains(&key) {
+                        continue;
+                    }
+                    seen_edges.insert(key);
+                }
+                builder.add_edge(
+                    nodes.get(&node.uid).copied().expect("Missing Node"),
+                    nodes.get(&edge.to).copied().expect("Missing Node"),
+                    self.metadata.edge_types[edge.r#type].clone(),
+                    None,
+                    self.metadata.edge_properties.get(edge.uid).cloned()
+                );
+            }
         }
-        let type_id = self.metadata.edge_types_reverse.get(&r#type)
-            .copied()
-            .ok_or_else(|| GraphQueryingError::UnknownType {kind: "edge".to_string(), name: r#type.clone()})?;
-        
-        let key = (from, Edge { to, r#type: type_id });
-        self.metadata.edge_properties.get(&key)
-            .ok_or(GraphQueryingError::NoSuchEdge {kind: r#type, src: from, tgt: to})
+        Ok(builder.build())
     }
 
     pub(crate) fn neighbours(&self) -> Neighbours {
@@ -301,22 +337,22 @@ impl HeteroDiGraph {
                         .or_insert_with(|| self.copy_node_to_builder(node, &mut builder));
                     let tgt_uid = *nodes.entry(target.uid)
                         .or_insert_with(|| self.copy_node_to_builder(target, &mut builder));
-                    builder.add_edge(src_uid, tgt_uid, mp_name.clone(), None);
+                    builder.add_edge(src_uid, tgt_uid, mp_name.clone(), None, None);
                 }
             }
         }
 
         Ok(builder.build())
     }
-    
+
     fn resolve_meta_path(&self, mp: MetaPath<String>) -> Result<MetaPath<usize>, HetNetError> {
         let resolved = mp.resolve_types(
-            &self.metadata.node_types_reverse, 
+            &self.metadata.node_types_reverse,
             &self.metadata.edge_types_reverse
         )?;
         Ok(resolved)
     }
-    
+
     fn copy_node_to_builder(&self, node: &Node, builder: &mut HeteroDiGraphBuilder) -> NodeRef {
         let node_type = self.metadata.node_types[node.r#type].clone();
         let node_data = self.metadata.node_properties
@@ -327,7 +363,7 @@ impl HeteroDiGraph {
 
     fn walk_meta_path<'a>(&'a self,
                           start: &'a Node,
-                          meta_path: &MetaPath<usize>, 
+                          meta_path: &MetaPath<usize>,
                           unique_nodes: bool) -> Vec<&'a Node> {
         let mut stack = vec![
             (start, 0usize, BTreeSet::from_iter(vec![start.uid]))

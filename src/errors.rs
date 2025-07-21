@@ -24,6 +24,9 @@ error_set::error_set!{
         
         #[display("Invalid Node ID: {uid}")]
         InvalidNodeId{uid: usize},
+
+        #[display("Invalid Edge ID: {uid}")]
+        InvalidEdgeId{uid: usize},
         
         #[display("No edge of type {kind} between nodes {src} and {tgt}")]
         NoSuchEdge{kind: String, src: usize, tgt: usize},

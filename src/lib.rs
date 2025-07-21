@@ -9,6 +9,7 @@ use pyo3::prelude::*;
 use shared_types::NodeRef;
 use crate::graph::{HeteroDiGraph, HeteroDiGraphBuilder};
 use crate::meta_path::{MetaPath, PathComponent};
+use crate::shared_types::{EdgeRef, NodeDescriptor, EdgeDescriptor};
 use crate::walker::{GraphExplorer, NeighbourSelector, RandomWalkConfig, RandomWalker, UnweightedNeighbourSelector, WeightedNeighbourSelector};
 
 pub mod graph;
@@ -34,7 +35,7 @@ impl PyMetaPath {
         let inner = MetaPath::new(pattern)?;
         Ok(PyMetaPath(inner))
     }
-    
+
     fn __repr__(&self) -> String {
         let mut parts = vec![_format_mp_node(&self.0.start)];
         for (edge, node) in self.0.steps.iter() {
@@ -70,32 +71,24 @@ struct PyHeteroDiGraph(HeteroDiGraph);
 
 #[pymethods]
 impl PyHeteroDiGraph {
-    fn node_list(&self) -> Vec<(PyNodeRef, String)> {
-        self.0.node_list()
-            .into_iter()
-            .map(|(r, t)| (PyNodeRef(r), t))
-            .collect()
+    fn node_list(&self) -> Vec<PyNodeDescriptor> {
+        self.0.node_list().into_iter().map(PyNodeDescriptor).collect()
     }
 
-    fn edge_list(&self) -> Vec<(PyNodeRef, PyNodeRef, String, usize)> {
-        self.0.edge_list()
-            .into_iter()
-            .map(
-                |(from, to, kind, count)|
-                    (PyNodeRef(from), PyNodeRef(to), kind, count)
-            )
-            .collect()
+    fn edge_list(&self) -> Vec<PyEdgeDescriptor> {
+        self.0.edge_list().into_iter().map(PyEdgeDescriptor).collect()
     }
 
     fn node_properties(&self, node: PyNodeRef) -> PyResult<&HashMap<String, String>> {
         Ok(self.0.node_properties(node.0)?)
     }
 
-    fn edge_properties(&self,
-                       source: PyNodeRef,
-                       destination: PyNodeRef,
-                       r#type: String) -> PyResult<&HashMap<String, String>> {
-        Ok(self.0.edge_properties(source.0, destination.0, r#type)?)
+    fn edge_properties(&self, uid: PyEdgeRef) -> PyResult<&HashMap<String, String>> {
+        Ok(self.0.edge_properties(uid.0)?)
+    }
+
+    fn deduplicate_edges(&self, types: Vec<String>) -> PyResult<Self> {
+        Ok(PyHeteroDiGraph(self.0.deduplicate_edges(types)?))
     }
 
     #[pyo3(signature = (meta_paths, *, unique_nodes = true))]
@@ -118,7 +111,7 @@ impl PyHeteroDiGraph {
                              start: PyNodeRef,
                              meta_paths: Vec<PyMetaPath>,
                              weighted: bool,
-                             path_length: usize, 
+                             path_length: usize,
                              unique_nodes: bool) -> PyResult<Vec<PyNodeRef>>
     {
         if meta_paths.is_empty() {
@@ -254,12 +247,12 @@ struct PyHeteroDiGraphBuilder(HeteroDiGraphBuilder, bool);
 
 #[pymethods]
 impl PyHeteroDiGraphBuilder {
-    
+
     #[new]
     fn new() -> Self {
         Self(HeteroDiGraphBuilder::new(), false)
     }
-    
+
     #[pyo3(signature = (r#type, *, properties = None))]
     fn add_node(&mut self, r#type: String, properties: Option<HashMap<String, String>>) -> PyResult<PyNodeRef> {
         if self.1 {
@@ -267,12 +260,13 @@ impl PyHeteroDiGraphBuilder {
         }
         Ok(PyNodeRef(self.0.add_node(r#type, properties)))
     }
-    
-    #[pyo3(signature = (source, destination, r#type, *, properties = None))]
+
+    #[pyo3(signature = (source, destination, r#type, *, weight = 1.0, properties = None))]
     fn add_edge(&mut self,
                 source: PyNodeRef,
                 destination: PyNodeRef,
                 r#type: String,
+                weight: f64,
                 properties: Option<HashMap<String, String>>) -> PyResult<()> {
         if self.1 {
             return Err(PyErr::new::<PyException, _>("Graph already built"));
@@ -281,11 +275,12 @@ impl PyHeteroDiGraphBuilder {
             source.0,
             destination.0,
             r#type,
+            Some(weight),
             properties
         );
         Ok(())
     }
-    
+
     fn build(&mut self) -> PyResult<PyHeteroDiGraph> {
         if self.1 {
             return Err(PyErr::new::<PyException, _>("Graph already built"));
@@ -297,7 +292,60 @@ impl PyHeteroDiGraphBuilder {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
-// Node Ref
+// Descriptors
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[pyclass(name = "NodeDescriptor")]
+struct PyNodeDescriptor(NodeDescriptor);
+
+#[pymethods]
+impl PyNodeDescriptor {
+    #[getter]
+    fn r#type(&self) -> String {
+        self.0.r#type.clone()
+    }
+
+    #[getter]
+    fn uid(&self) -> PyNodeRef {
+        PyNodeRef(self.0.uid)
+    }
+}
+
+
+#[pyclass(name = "EdgeDescriptor")]
+struct PyEdgeDescriptor(EdgeDescriptor);
+
+#[pymethods]
+impl PyEdgeDescriptor {
+    #[getter]
+    fn source(&self) -> PyNodeRef {
+        PyNodeRef(self.0.from)
+    }
+
+    #[getter]
+    fn destination(&self) -> PyNodeRef {
+        PyNodeRef(self.0.to)
+    }
+
+    #[getter]
+    fn r#type(&self) -> String {
+        self.0.r#type.clone()
+    }
+
+    #[getter]
+    fn uid(&self) -> PyEdgeRef {
+        PyEdgeRef(self.0.uid)
+    }
+
+    #[getter]
+    fn weight(&self) -> f64 {
+        self.0.weight
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// Ref Objects
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[pyclass(name = "NodeRef", eq, hash, frozen)]
@@ -308,6 +356,18 @@ struct PyNodeRef(NodeRef);
 impl PyNodeRef {
     fn __repr__(&self) -> String {
         format!("NodeRef<{}>", self.0.0)
+    }
+}
+
+
+#[pyclass(name = "EdgeRef", eq, hash, frozen)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+struct PyEdgeRef(EdgeRef);
+
+#[pymethods]
+impl PyEdgeRef {
+    fn __repr__(&self) -> String {
+        format!("EdgeRef<{}>", self.0.0)
     }
 }
 
@@ -322,6 +382,9 @@ fn _hetnet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMetaPath>()?;
     m.add_class::<PyHeteroDiGraph>()?;
     m.add_class::<PyHeteroDiGraphBuilder>()?;
+    m.add_class::<PyNodeDescriptor>()?;
+    m.add_class::<PyEdgeDescriptor>()?;
     m.add_class::<PyNodeRef>()?;
+    m.add_class::<PyEdgeRef>()?;
     Ok(())
 }

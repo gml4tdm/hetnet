@@ -88,13 +88,17 @@ impl<T: rand::Rng> NeighbourSelector for WeightedNeighbourSelector<T> {
 
 
 pub struct RandomWalkConfig {
-    path_length: usize
+    path_length: usize,
+    p: f64,
+    q: f64
 }
 
 impl Default for RandomWalkConfig {
     fn default() -> Self {
         Self {
-            path_length: 10
+            path_length: 10,
+            p: 1.0,
+            q: 1.0
         }
     }
 }
@@ -102,6 +106,16 @@ impl Default for RandomWalkConfig {
 impl RandomWalkConfig {
     pub fn with_path_length(mut self, path_length: usize) -> Self {
         self.path_length = path_length;
+        self
+    }
+
+    pub fn with_p(mut self, p: f64) -> Self {
+        self.p = p;
+        self
+    }
+
+    pub fn with_q(mut self, q: f64) -> Self {
+        self.q = q;
         self
     }
 }
