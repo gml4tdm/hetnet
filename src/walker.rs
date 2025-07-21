@@ -14,11 +14,16 @@ use crate::shared_types::NodeRef;
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub(crate) trait GraphExplorer {
-    fn neighbours(&self, node: NodeRef) -> Result<HashMap<NodeRef, usize>, HetNetError>;
+    type Config: Default;
+    type State: Default;
+    fn neighbours(&self,
+                  node: NodeRef,
+                  state: &mut Self::State,
+                  config: &Self::Config) -> Result<HashMap<NodeRef, f64>, HetNetError>;
 }
 
 pub trait NeighbourSelector {
-    fn select(&mut self, from: &[(NodeRef, usize)]) -> NodeRef;
+    fn select(&mut self, from: &[(NodeRef, f64)]) -> NodeRef;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,7 +48,8 @@ impl<T: rand::Rng> UnweightedNeighbourSelector<T> {
 }
 
 impl<T: rand::Rng> NeighbourSelector for UnweightedNeighbourSelector<T> {
-    fn select(&mut self, from: &[(NodeRef, usize)]) -> NodeRef {
+
+    fn select(&mut self, from: &[(NodeRef, f64)]) -> NodeRef {
         let index = self.rng.random_range(0..from.len());
         from[index].0
     }
@@ -67,15 +73,16 @@ impl<T: rand::Rng> WeightedNeighbourSelector<T> {
 }
 
 impl<T: rand::Rng> NeighbourSelector for WeightedNeighbourSelector<T> {
-    fn select(&mut self, from: &[(NodeRef, usize)]) -> NodeRef {
+
+    fn select(&mut self, from: &[(NodeRef, f64)]) -> NodeRef {
         let mut hist = Vec::new();
-        let mut total = 0;
+        let mut total = 0.0;
         for (_, count) in from.iter().copied() {
             total += count;
             hist.push(total);
         }
 
-        let selected = self.rng.random_range(0..total);
+        let selected = self.rng.random_range(0.0..total);
         let index = hist.partition_point(|&x| x <= selected);
         from[index].0
     }
@@ -87,35 +94,28 @@ impl<T: rand::Rng> NeighbourSelector for WeightedNeighbourSelector<T> {
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-pub struct RandomWalkConfig {
+pub struct RandomWalkConfig<T: GraphExplorer> {
     path_length: usize,
-    p: f64,
-    q: f64
+    explorer_args: T::Config
 }
 
-impl Default for RandomWalkConfig {
+impl<T: GraphExplorer> Default for RandomWalkConfig<T> {
     fn default() -> Self {
         Self {
             path_length: 10,
-            p: 1.0,
-            q: 1.0
+            explorer_args: T::Config::default()
         }
     }
 }
 
-impl RandomWalkConfig {
+impl<T: GraphExplorer> RandomWalkConfig<T> {
     pub fn with_path_length(mut self, path_length: usize) -> Self {
         self.path_length = path_length;
         self
     }
 
-    pub fn with_p(mut self, p: f64) -> Self {
-        self.p = p;
-        self
-    }
-
-    pub fn with_q(mut self, q: f64) -> Self {
-        self.q = q;
+    pub fn with_selector_config(mut self, conf: T::Config) -> Self {
+        self.explorer_args = conf;
         self
     }
 }
@@ -124,20 +124,23 @@ impl RandomWalkConfig {
 pub struct RandomWalker<G: GraphExplorer, N: NeighbourSelector> {
     explorer: G,
     selector: N,
-    config: RandomWalkConfig,
+    config: RandomWalkConfig<G>,
 }
 
 impl<G: GraphExplorer, N: NeighbourSelector> RandomWalker<G, N> {
-    pub fn new(explorer: G, selector: N, config: RandomWalkConfig) -> Self {
+    pub fn new(explorer: G, selector: N, config: RandomWalkConfig<G>) -> Self {
         RandomWalker { explorer, selector, config }
     }
 
     pub fn walk_from(&mut self, start: NodeRef) -> Result<Vec<NodeRef>, HetNetError> {
         let mut path = vec![start];
         let mut current = start;
+        let mut state = G::State::default();
 
         for _ in 0..self.config.path_length {
-            let neighbours = self.explorer.neighbours(current)?;
+            let neighbours = self.explorer.neighbours(
+                current, &mut state, &self.config.explorer_args
+            )?;
             let histogram = neighbours.into_iter().collect::<Vec<_>>();
             current = self.selector.select(&histogram);
             path.push(current);

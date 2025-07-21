@@ -97,16 +97,6 @@ class Graph:
                     path_length: int = 10) -> list[NodeRef]:
         return self._graph.random_walk(start, weighted=weighted, path_length=path_length)
 
-    def meta_path_random_walk(self,
-                              start: NodeRef,
-                              meta_paths: list[MetaPath], *,
-                              weighted: bool = True,
-                              path_length: int = 10,
-                              unique_nodes: bool = True) -> list[NodeRef]:
-        return self._graph.meta_path_random_walk(
-            start, meta_paths, weighted=weighted, path_length=path_length, unique_nodes=unique_nodes
-        )
-
     def random_walk_distribution(self,
                                  start: NodeRef, *,
                                  weighted: bool = True,
@@ -114,17 +104,6 @@ class Graph:
                                  n_iter: int = 100) -> dict[NodeRef, int]:
         return self._graph.random_walk_distribution(
             start, weighted=weighted, path_length=path_length, n_iter=n_iter
-        )
-
-    def meta_path_random_walk_distribution(self,
-                                           start: NodeRef,
-                                           meta_paths: list[MetaPath], *,
-                                           weighted: bool = True,
-                                           path_length: int = 10,
-                                           unique_nodes: bool = True,
-                                           n_iter: int = 100) -> dict[NodeRef, int]:
-        return self._graph.meta_path_random_walk_distribution(
-            start, meta_paths, weighted=weighted, path_length=path_length, unique_nodes=unique_nodes, n_iter=n_iter
         )
 
     def to_dot_graph(self, *, aggregated_edges: bool = True):

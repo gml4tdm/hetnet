@@ -11,7 +11,6 @@ use crate::shared_types::{Edge, EdgeDescriptor, EdgeRef, Node, NodeDescriptor, N
 use crate::walker;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
 // Types
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,12 +35,6 @@ struct GraphMetaData {
 
 pub(crate) struct Neighbours<'a> {
     graph: &'a HeteroDiGraph,
-}
-
-pub(crate) struct MetaPathNeighbours<'a> {
-    graph: &'a HeteroDiGraph,
-    unique_nodes: bool,
-    meta_paths: Vec<MetaPath<usize>>
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -147,67 +140,63 @@ impl HeteroDiGraphBuilder {
 // Path Traversal
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+pub struct Node2VecArgs {
+    pub(super) p: f64,
+    pub(super) q: f64
+}
+
+impl Default for Node2VecArgs {
+    fn default() -> Self {
+        Self {p: 1.0, q: 1.0}
+    }
+}
+
 impl<'a> walker::GraphExplorer for Neighbours<'a> {
+    type State = Option<NodeRef>;
+    type Config = Node2VecArgs;
+
     fn neighbours(
         &self,
-        NodeRef(uid): NodeRef
-    ) -> Result<HashMap<NodeRef, usize>, HetNetError>
+        NodeRef(uid): NodeRef,
+        state: &mut Self::State,
+        config: &Self::Config
+    ) -> Result<HashMap<NodeRef, f64>, HetNetError>
     {
         let node = self.graph.nodes.get(uid)
             .ok_or(GraphQueryingError::InvalidNodeId{uid})?;
         let stream = node.connections.iter()
-            .map(|edge| NodeRef(edge.to));
+            .map(|edge| (NodeRef(edge.to), edge.weight));
         let mut result = HashMap::new();
-        for item in stream {
-            result.entry(item).and_modify(|x| *x += 1).or_insert(1);
-        }
-        Ok(result)
-    }
-}
-
-impl<'a> walker::GraphExplorer for MetaPathNeighbours<'a> {
-    fn neighbours(
-        &self,
-        NodeRef(start_id): NodeRef
-    ) -> Result<HashMap<NodeRef, usize>, HetNetError>
-    {
-        let start = self.graph.nodes.get(start_id)
-            .ok_or(GraphQueryingError::InvalidNodeId {uid: start_id})?;
-
-        let mut result = HashMap::new();
-
-        for meta_path in self.meta_paths.iter() {
-            let mut stack = vec![
-                (start, 0usize, BTreeSet::from_iter(vec![start.uid]))
-            ];
-
-            while let Some((node, index, seen)) = stack.pop() {
-                if index >= meta_path.steps.len() {
-                    result.entry(NodeRef(node.uid)).and_modify(|x| *x += 1).or_insert(1);
-                } else {
-                    let (edge_type, node_type) = meta_path.steps[index];
-                    for edge in node.connections.iter() {
-                        if !edge_type.matches(&edge.r#type) {
-                            continue;
-                        }
-                        let new_node = &self.graph.nodes[edge.to];
-                        if !node_type.matches(&new_node.r#type) || seen.contains(&new_node.uid) {
-                            continue;
-                        }
-                        let mut seen_for_edge = seen.clone();
-                        if self.unique_nodes {
-                            seen_for_edge.insert(new_node.uid);
-                        }
-                        stack.push((new_node, index + 1, seen_for_edge));
-                    }
+        match state {
+            None => {
+                for (item, w) in stream {
+                    result.entry(item).and_modify(|x| *x += w).or_insert(w);
+                }
+            }
+            Some(prev) => {
+                let NodeRef(prev_id) = *prev;
+                let reachable = self.graph.nodes.get(prev_id)
+                    .expect("Invalid state")
+                    .connections
+                    .iter()
+                    .map(|edge| edge.to)
+                    .collect::<HashSet<_>>();
+                for (NodeRef(item), w) in stream {
+                    let p = if prev_id == item {
+                        1.0/config.p * w
+                    } else if reachable.contains(&item) {
+                        w
+                    } else {
+                        1.0/config.q * w
+                    };
+                    result.entry(NodeRef(item)).and_modify(|x| *x += p).or_insert(p);
                 }
             }
         }
-
         Ok(result)
     }
 }
-
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -297,18 +286,6 @@ impl HeteroDiGraph {
 
     pub(crate) fn neighbours(&self) -> Neighbours {
         Neighbours { graph: self }
-    }
-
-    pub(crate) fn meta_path_neighbours(
-        &self,
-        meta_paths: Vec<MetaPath<String>>,
-        unique_nodes: bool
-    ) -> Result<MetaPathNeighbours, HetNetError>
-    {
-        let resolved = meta_paths.into_iter()
-            .map(|mp| self.resolve_meta_path(mp))
-            .collect::<Result<Vec<_>, HetNetError>>()?;
-        Ok(MetaPathNeighbours { graph: self, meta_paths: resolved, unique_nodes })
     }
 
     pub fn meta_path_subgraph(

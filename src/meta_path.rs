@@ -73,6 +73,23 @@ impl MetaPath<String> {
     }
 }
 
+impl<T: Clone> MetaPath<T> {
+    pub fn reverse(&self) -> Self {
+        let mut steps = Vec::new();
+        let mut prev = self.start.clone();
+        for (edge, node) in self.steps.iter().cloned() {
+            steps.push((edge, prev));
+            prev = node;
+        }
+        steps.reverse();
+        MetaPath {
+            start: prev,
+            steps,
+            cached_hash: OnceLock::new()
+        }
+    }
+}
+
 impl PathComponent<String> {
     fn maybe_resolve(self, 
                      mapping: &HashMap<String, usize>, 
