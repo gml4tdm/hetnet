@@ -1,0 +1,10 @@
+[package]
+name = "hetnet"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+error_set = "0.8.5"
+pyo3 = "0.25.1"
+rand = "0.9.1"
+
