@@ -3,7 +3,7 @@
 // Imports
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use crate::{HetNetError, HetNetResult, HeteroDiGraph, MetaPath};

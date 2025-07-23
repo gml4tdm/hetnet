@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import typing
 
 import graphviz
 
@@ -79,8 +80,17 @@ class Graph:
     def edge_properties(self, edge: EdgeRef) -> dict[str, str]:
         return self._graph.edge_properties(edge)
 
-    def deduplicate_edges(self, *types: str) -> Graph:
-        return Graph(self._graph.deduplicate_edges(list(types)), index=self._raw_index)
+    def deduplicate_edges(
+        self,
+        types: list[str], *,
+        data_handling: typing.Literal['discard', 'enforce_identical'],
+        weight_handling: typing.Literal['set_to_one', 'enforce_identical', 'sum_aggregate']
+    ) -> Graph:
+        return Graph(
+            self._graph.deduplicate_edges(
+                list(types), data_handling=data_handling, weight_handling=weight_handling),
+            index=self._raw_index
+        )
 
     def meta_path_subgraph(self,
                            metapaths: dict[str, MetaPath], *,
@@ -108,7 +118,9 @@ class Graph:
 
     def to_dot_graph(self, *, aggregated_edges: bool = True):
         graph = graphviz.Digraph()
-        for uid, kind in self.node_list():
+        for descriptor in self.node_list():
+            uid = descriptor.uid
+            kind = descriptor.type
             graph.node(str(uid), label=kind)
         if aggregated_edges:
             agg = collections.defaultdict(float)

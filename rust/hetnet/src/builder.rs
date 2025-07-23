@@ -4,10 +4,18 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use crate::graph::{HeteroDiGraph, Node, NodeRef, Edge, EdgeRef, NodeMetadata, EdgeMetadata, GraphMetadata, RawNodeRef};
+
+use crate::graph::{
+    HeteroDiGraph,
+    Node, NodeRef,
+    Edge, EdgeRef,
+    NodeMetadata, EdgeMetadata, GraphMetadata,
+    RawNodeRef
+};
 use crate::{HetNetError, HetNetResult};
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Auxiliary functions
@@ -60,7 +68,7 @@ impl HeteroDiGraphBuilder {
             .or_insert(next_type_id);
         self.nodes.push(Node {
             uid,
-            property_index: uid,    // Equal to UID, unless node trimming is performed 
+            property_index: uid,    // Equal to UID, unless node trimming is performed
             r#type: type_id,
             connections: Vec::new(),
         });

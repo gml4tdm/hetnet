@@ -89,8 +89,8 @@ impl PyHeteroDiGraph {
 
     #[pyo3(signature = (types, *, data_handling, weight_handling))]
     fn deduplicate_edges(&self,
-                         types: Vec<String>, 
-                         data_handling: String, 
+                         types: Vec<String>,
+                         data_handling: String,
                          weight_handling: String) -> PyResult<Self> {
         let dh = match data_handling.as_str() {
             "discard" => dedup::DataHandling::Discard,
@@ -267,18 +267,18 @@ impl PyHeteroDiGraphBuilder {
                 destination: PyNodeRef,
                 r#type: String,
                 weight: f64,
-                properties: Option<HashMap<String, String>>) -> PyResult<()> {
+                properties: Option<HashMap<String, String>>) -> PyResult<PyEdgeRef> {
         if self.1 {
             return Err(PyErr::new::<PyException, _>("Graph already built"));
         }
-        self.0.add_edge(
+        let result = self.0.add_edge(
             source.0,
             destination.0,
             r#type,
             Some(weight),
             properties
         );
-        Ok(())
+        Ok(PyEdgeRef(convert_result(result)?))
     }
 
     fn build(&mut self) -> PyResult<PyHeteroDiGraph> {
