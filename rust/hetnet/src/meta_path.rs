@@ -33,7 +33,7 @@ impl<T: Copy> Copy for PathComponent<T> {}
 
 impl<T: Eq> PartialEq for MetaPath<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.start == other.start && self.steps == other.steps 
+        self.start == other.start && self.steps == other.steps
     }
 }
 
@@ -48,7 +48,7 @@ impl<T: Hash> Hash for MetaPath<T> {
             self.start.hash(&mut hasher);
             self.steps.hash(&mut hasher);
             let h = hasher.finish();
-            let _ = self.cached_hash.set(h);    // Error can be safely ignored 
+            let _ = self.cached_hash.set(h);    // Error can be safely ignored
             h.hash(state);
         }
     }
@@ -88,8 +88,8 @@ impl MetaPath<String> {
     pub fn new(pattern: impl AsRef<str>) -> Result<Self, MetaPathDefinitionError> {
         Self::from_str(pattern.as_ref())
     }
-    
-    pub(super) fn resolve_types(self, 
+
+    pub(super) fn resolve_types(self,
                                 node_types: &HashMap<String, usize>,
                                 edge_types: &HashMap<String, usize>) -> Result<MetaPath<usize>, MetaPathDefinitionError>
     {
@@ -123,8 +123,8 @@ impl<T: Clone> MetaPath<T> {
 }
 
 impl PathComponent<String> {
-    fn maybe_resolve(self, 
-                     mapping: &HashMap<String, usize>, 
+    fn maybe_resolve(self,
+                     mapping: &HashMap<String, usize>,
                      kind: &'static str) -> Result<PathComponent<usize>, MetaPathDefinitionError>
     {
         match self {
@@ -141,7 +141,7 @@ impl PathComponent<String> {
     }
 }
 
-impl<'a, T: 'a> PathComponent<T> 
+impl<'a, T: 'a> PathComponent<T>
 where &'a T: Eq
 {
     pub(super) fn matches(&'a self, x: &'a T) -> bool {
@@ -161,7 +161,7 @@ impl FromStr for MetaPath<String> {
     type Err = MetaPathDefinitionError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Syntax: 
+        // Syntax:
         // [Node] -{edge}-> [Node]
         // [Node] -> [Node] (edge wildcard)
         // [Node] -{edge}-> [*] (node wildcard)
@@ -178,7 +178,7 @@ impl FromStr for MetaPath<String> {
     }
 }
 
-fn parse_node_type<I>(stream: &mut I) -> Result<PathComponent<String>, MetaPathDefinitionError> 
+fn parse_node_type<I>(stream: &mut I) -> Result<PathComponent<String>, MetaPathDefinitionError>
 where
     I: Iterator<Item=char>
 {
@@ -195,7 +195,7 @@ where
             let _ = expect_exact(stream, ']', "node type", true)?;
             Ok(PathComponent::Wildcard)
         }
-        Some(c) if c.is_ascii_alphabetic() => {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => {
             let name = expect_ascii_or_close(
                 stream, Some(c), ']', "node type"
             )?;
@@ -215,7 +215,7 @@ where
 }
 
 fn parse_edge_type<I>(stream: &mut I, required: bool) -> Result<Option<PathComponent<String>>, MetaPathDefinitionError>
-where 
+where
     I: Iterator<Item=char>
 {
     if !expect_exact(stream, '-', "edge type", required)? {
@@ -238,21 +238,21 @@ where
     }
 }
 
-fn expect_ascii_or_close<I>(stream: &mut I, 
+fn expect_ascii_or_close<I>(stream: &mut I,
                             initial: Option<char>,
                             closer: char,
                             hint: &'static str) -> Result<String, MetaPathDefinitionError>
-where 
+where
     I: Iterator<Item=char>
 {
     let mut buffer = match initial {
         Some(c) => vec![c],
         None => Vec::new()
     };
-    
+
     loop {
         match stream.next() {
-            Some(c) if c.is_ascii_alphabetic() => {
+            Some(c) if c.is_ascii_alphabetic() || c == '_' => {
                 buffer.push(c)
             }
             Some(c) if c == closer => {
@@ -270,7 +270,7 @@ where
             }
         }
     }
-    
+
     if buffer.is_empty() {
         return Err(MetaPathDefinitionError::InvalidSyntax {
             detail: format!("Empty type name in {hint}")
@@ -281,7 +281,7 @@ where
 
 fn expect_exact<I>(stream: &mut I,
                    e: char,
-                   hint: &'static str, 
+                   hint: &'static str,
                    required: bool) -> Result<bool, MetaPathDefinitionError>
 where
     I: Iterator<Item=char>

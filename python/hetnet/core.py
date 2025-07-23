@@ -82,7 +82,7 @@ class Graph:
 
     def deduplicate_edges(
         self,
-        types: list[str], *,
+        *types: str,
         data_handling: typing.Literal['discard', 'enforce_identical'],
         weight_handling: typing.Literal['set_to_one', 'enforce_identical', 'sum_aggregate']
     ) -> Graph:
