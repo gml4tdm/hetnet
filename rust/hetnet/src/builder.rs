@@ -4,15 +4,21 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 use std::collections::HashMap;
-use std::sync::Arc;
-use crate::graph::{
-    HeteroDiGraph,
-    Node, NodeRef, NodeTypeRef,
-    Edge, EdgeRef, EdgeTypeRef,
-    NodeMetadata,
-    EdgeMetadata,
-    GraphMetadata
-};
+use std::sync::{Arc, OnceLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use crate::graph::{HeteroDiGraph, Node, NodeRef, Edge, EdgeRef, NodeMetadata, EdgeMetadata, GraphMetadata, RawNodeRef};
+use crate::{HetNetError, HetNetResult};
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// Auxiliary functions
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+static NEXT_GRAPH_UID: AtomicUsize = AtomicUsize::new(0);
+
+pub(crate) fn next_graph_id() -> usize {
+    NEXT_GRAPH_UID.fetch_add(1, Ordering::Relaxed)
+}
+
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,6 +27,7 @@ use crate::graph::{
 
 #[derive(Debug, Default, Clone)]
 pub struct HeteroDiGraphBuilder {
+    graph_uid: usize,
     nodes: Vec<Node>,
     node_types: HashMap<String, usize>,
     edge_types: HashMap<String, usize>,
@@ -36,7 +43,11 @@ pub struct HeteroDiGraphBuilder {
 
 impl HeteroDiGraphBuilder {
     pub fn new() -> Self {
-        Self { next_edge_id: 0, ..Default::default() }
+        Self {
+            graph_uid: next_graph_id(),
+            next_edge_id: 0,
+            ..Default::default()
+        }
     }
 
     pub fn add_node(&mut self,
@@ -49,11 +60,12 @@ impl HeteroDiGraphBuilder {
             .or_insert(next_type_id);
         self.nodes.push(Node {
             uid,
-            r#type: NodeTypeRef(type_id),
+            property_index: uid,    // Equal to UID, unless node trimming is performed 
+            r#type: type_id,
             connections: Vec::new(),
         });
         self.node_properties.push(properties.unwrap_or_default());
-        NodeRef(uid)
+        NodeRef { graph_uid: self.graph_uid, node_uid: uid }
     }
 
     pub fn add_edge(&mut self,
@@ -61,37 +73,40 @@ impl HeteroDiGraphBuilder {
                     to: NodeRef,
                     r#type: String,
                     weight: Option<f64>,
-                    properties: Option<HashMap<String, String>>) -> EdgeRef {
+                    properties: Option<HashMap<String, String>>) -> HetNetResult<EdgeRef> {
+        if from.graph_uid != self.graph_uid || to.graph_uid != self.graph_uid {
+            return Err(HetNetError::InvalidReference);
+        }
         let next_type_id = self.edge_types.len();
         let type_id = *self.edge_types
             .entry(r#type.clone())
             .or_insert(next_type_id);
         let edge = Edge {
-            r#type: EdgeTypeRef(type_id),
-            to: NodeRef(to.0),
+            r#type: type_id,
+            to: RawNodeRef(to.node_uid),
             weight: weight.unwrap_or(1.0),
             uid: self.next_edge_id
         };
         self.next_edge_id += 1;
-        self.nodes.get_mut(from.0)
+        self.nodes.get_mut(from.node_uid)
             .expect("Invalid node reference")
             .connections
             .push(edge);
         self.edge_properties.push(properties.unwrap_or_default());
-        EdgeRef(edge.uid)
+        Ok(EdgeRef { graph_uid: self.graph_uid, edge_uid: edge.uid })
     }
 
     pub fn build(self) -> HeteroDiGraph {
         let edge_types = Self::convert_mapping(self.edge_types);
         let edge_types_reverse = edge_types.iter()
             .enumerate()
-            .map(|(i, x)| (x.to_string(), EdgeTypeRef(i)))
+            .map(|(i, x)| (x.to_string(), i))
             .collect::<HashMap<_, _>>();
 
         let node_types = Self::convert_mapping(self.node_types);
         let node_types_reverse = node_types.iter()
             .enumerate()
-            .map(|(i, x)| (x.to_string(), NodeTypeRef(i)))
+            .map(|(i, x)| (x.to_string(), i))
             .collect::<HashMap<_, _>>();
 
         let node_metadata = NodeMetadata {
@@ -109,6 +124,7 @@ impl HeteroDiGraphBuilder {
         };
 
         HeteroDiGraph {
+            uid: self.graph_uid,
             node_metadata: Arc::new(node_metadata),
             edge_metadata: Arc::new(edge_metadata),
             graph_metadata: Arc::new(graph_metadata),

@@ -15,6 +15,9 @@ error_set::error_set!{
     };
 
     GraphQueryingError = {
+        #[display("Invalid Reference for Graph")]
+        InvalidReference,
+        
         #[display("Unknown {kind} type: {name}")]
         UnknownType{kind: String, name: String},
 

@@ -64,8 +64,8 @@ impl MetaPath<String> {
     }
     
     pub(super) fn resolve_types(self, 
-                                node_types: &HashMap<String, usize>, 
-                                edge_types: &HashMap<String, usize>) -> Result<MetaPath<usize>, MetaPathDefinitionError> 
+                                node_types: &HashMap<String, usize>,
+                                edge_types: &HashMap<String, usize>) -> Result<MetaPath<usize>, MetaPathDefinitionError>
     {
         let start = self.start.maybe_resolve(node_types, "node")?;
         let steps = self.steps.into_iter()

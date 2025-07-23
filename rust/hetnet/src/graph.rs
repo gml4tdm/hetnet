@@ -16,6 +16,7 @@ use crate::errors::GraphQueryingError;
 
 #[derive(Debug)]
 pub struct HeteroDiGraph {
+    pub(crate) uid: usize,
     pub(crate) node_metadata: Arc<NodeMetadata>,
     pub(crate) edge_metadata: Arc<EdgeMetadata>,
     pub(crate) graph_metadata: Arc<GraphMetadata>,
@@ -30,43 +31,54 @@ pub(crate) struct GraphMetadata {
 #[derive(Debug)]
 pub(crate) struct NodeMetadata {
     pub(crate) node_types: Vec<String>,
-    pub(crate) node_types_reverse: HashMap<String, NodeTypeRef>,
+    pub(crate) node_types_reverse: HashMap<String, usize>,
     pub(crate) node_properties: Vec<HashMap<String, String>>,
 }
 
 #[derive(Debug)]
 pub(crate) struct EdgeMetadata {
     pub(crate) edge_types: Vec<String>,
-    pub(crate) edge_types_reverse: HashMap<String, EdgeTypeRef>,
+    pub(crate) edge_types_reverse: HashMap<String, usize>,
     pub(crate) edge_properties: Vec<HashMap<String, String>>
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct Node {
     pub(crate) uid: usize,
-    pub(crate) r#type: NodeTypeRef,
+    pub(crate) property_index: usize,
+    pub(crate) r#type: usize,
     pub(crate) connections: Vec<Edge>
 }
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct Edge {
     pub(crate) uid: usize,
-    pub(crate) r#type: EdgeTypeRef,
-    pub(crate) to: NodeRef,
+    pub(crate) r#type: usize,
+    pub(crate) to: RawNodeRef,
     pub(crate) weight: f64
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub struct NodeRef(pub(crate) usize);
+pub struct NodeRef {
+    pub(crate) graph_uid: usize,
+    pub(crate) node_uid: usize
+}
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub struct EdgeRef(pub(crate) usize);
+pub struct EdgeRef {
+    pub(crate) graph_uid: usize,
+    pub(crate) edge_uid: usize
+}
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub(crate) struct NodeTypeRef(pub(crate) usize);
+pub struct RawNodeRef(pub(crate) usize);
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub(crate) struct EdgeTypeRef(pub(crate) usize);
+impl RawNodeRef {
+    pub(crate) fn upgrade(&self, graph_uid: usize) -> NodeRef {
+        NodeRef { graph_uid, node_uid: self.0 }
+    }
+}
+
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,9 +90,9 @@ impl HeteroDiGraph {
         let mut result = Vec::with_capacity(self.nodes.len());
         let metadata = &*self.node_metadata;
         for node in self.nodes.iter() {
-            let type_name = metadata.node_types[node.r#type.0].clone();
+            let type_name = metadata.node_types[node.r#type].clone();
             result.push(NodeDescriptor {
-                uid: NodeRef(node.uid),
+                uid: NodeRef { graph_uid: self.uid, node_uid: node.uid },
                 r#type: type_name,
             });
         }
@@ -92,11 +104,11 @@ impl HeteroDiGraph {
         let metadata = &*self.edge_metadata;
         for node in self.nodes.iter() {
             for edge in node.connections.iter() {
-                let type_name = metadata.edge_types[edge.r#type.0].clone();
+                let type_name = metadata.edge_types[edge.r#type].clone();
                 result.push(EdgeDescriptor {
-                    uid: EdgeRef(edge.uid),
-                    from: NodeRef(node.uid),
-                    to: edge.to,
+                    uid: EdgeRef { graph_uid: self.uid, edge_uid: edge.uid },
+                    from: NodeRef { graph_uid: self.uid, node_uid: node.uid },
+                    to: edge.to.upgrade(self.uid),
                     r#type: type_name,
                     weight: edge.weight
                 })
@@ -105,13 +117,22 @@ impl HeteroDiGraph {
         result
     }
 
-    pub fn node_properties(&self, NodeRef(uid): NodeRef) -> Result<&HashMap<String, String>, GraphQueryingError> {
-        self.node_metadata.node_properties.get(uid)
-            .ok_or(GraphQueryingError::InvalidNodeId{uid})
+    pub fn node_properties(&self, reference: NodeRef) -> Result<&HashMap<String, String>, GraphQueryingError> {
+        if reference.graph_uid != self.uid {
+            return Err(GraphQueryingError::InvalidReference);
+        }
+        let index = self.nodes.get(reference.node_uid)
+            .ok_or(GraphQueryingError::InvalidNodeId{uid: reference.node_uid})?
+            .property_index;
+        self.node_metadata.node_properties.get(index)
+            .ok_or_else(|| panic!("No metadata for index {index}"))
     }
 
-    pub fn edge_properties(&self, EdgeRef(uid): EdgeRef) -> Result<&HashMap<String, String>, GraphQueryingError> {
-        self.edge_metadata.edge_properties.get(uid)
-            .ok_or(GraphQueryingError::InvalidEdgeId{uid})
+    pub fn edge_properties(&self, reference: EdgeRef) -> Result<&HashMap<String, String>, GraphQueryingError> {
+        if reference.graph_uid != self.uid {
+            return Err(GraphQueryingError::InvalidReference);
+        }
+        self.edge_metadata.edge_properties.get(reference.edge_uid)
+            .ok_or(GraphQueryingError::InvalidEdgeId{uid: reference.edge_uid})
     }
 }

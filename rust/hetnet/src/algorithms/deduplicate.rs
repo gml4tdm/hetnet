@@ -7,8 +7,9 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use crate::{EdgeRef, HetNetError, HetNetResult, HeteroDiGraph, NodeRef};
-use crate::graph::{Edge, EdgeMetadata, EdgeTypeRef, Node};
+use crate::{HetNetError, HetNetResult, HeteroDiGraph};
+use crate::builder::next_graph_id;
+use crate::graph::{Edge, EdgeMetadata, Node};
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,6 +51,7 @@ impl HeteroDiGraph {
             .map(|node| {
                 let node = Node {
                     uid: node.uid,
+                    property_index: node.property_index,
                     r#type: node.r#type,
                     connections: deduplicate_edges(
                         &node.connections,
@@ -66,6 +68,7 @@ impl HeteroDiGraph {
 
         // Build new graph
         let graph = HeteroDiGraph {
+            uid: next_graph_id(),
             node_metadata: self.node_metadata.clone(),
             graph_metadata: self.graph_metadata.clone(),
             edge_metadata: Arc::new(
@@ -82,7 +85,7 @@ impl HeteroDiGraph {
 }
 
 fn deduplicate_edges(edges: &[Edge],
-                     dedup: &HashSet<EdgeTypeRef>,
+                     dedup: &HashSet<usize>,
                      data_handling: DataHandling,
                      weight_handling: WeightHandling,
                      next_edge_id: &mut usize,
