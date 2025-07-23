@@ -16,6 +16,11 @@ pub use meta_path::MetaPath;
 pub use descriptors::{NodeDescriptor, EdgeDescriptor};
 pub use errors::{HetNetError, HetNetResult};
 
+pub mod deduplication {
+    pub use crate::algorithms::deduplicate::DataHandling;
+    pub use crate::algorithms::deduplicate::WeightHandling;
+}
+
 pub mod walkers {
     pub use crate::algorithms::neighbourhood::Neighbours;
     pub use crate::algorithms::neighbourhood::Node2VecArgs;
@@ -24,6 +29,7 @@ pub mod walkers {
         UnweightedNeighbourSelector,
         WeightedNeighbourSelector,
         GraphExplorer,
-        NeighbourSelector
+        NeighbourSelector,
+        RandomWalker
     };
 }

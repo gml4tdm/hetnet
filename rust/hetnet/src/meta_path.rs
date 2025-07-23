@@ -4,6 +4,7 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::str::FromStr;
 use std::sync::OnceLock;
@@ -50,6 +51,31 @@ impl<T: Hash> Hash for MetaPath<T> {
             let _ = self.cached_hash.set(h);    // Error can be safely ignored 
             h.hash(state);
         }
+    }
+}
+
+impl Display for MetaPath<String> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", _format_mp_node(&self.start))?;
+        for (edge, node) in self.steps.iter() {
+            write!(f, "{}", _format_mp_edge(edge))?;
+            write!(f, "{}", _format_mp_node(node))?;
+        }
+        Ok(())
+    }
+}
+
+fn _format_mp_node(x: &PathComponent<String>) -> String {
+    match x {
+        PathComponent::Typed(inner) => format!("[{inner}]"),
+        PathComponent::Wildcard => "[*]".to_string(),
+    }
+}
+
+fn _format_mp_edge(e: &PathComponent<String>) -> String {
+    match e {
+        PathComponent::Typed(inner) => format!("-{{{inner}}}->"),
+        PathComponent::Wildcard => "->".to_string(),
     }
 }
 

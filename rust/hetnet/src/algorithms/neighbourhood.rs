@@ -15,12 +15,6 @@ use crate::graph::RawNodeRef;
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-impl HeteroDiGraph {
-    pub(super) fn neighbours(&self) -> Neighbours {
-        Neighbours { graph: self }
-    }
-}
-
 pub struct Node2VecArgs {
     pub(super) p: f64,
     pub(super) q: f64
@@ -56,6 +50,13 @@ impl Node2VecArgs {
 
 pub struct Neighbours<'a> {
     graph: &'a HeteroDiGraph,
+}
+
+
+impl HeteroDiGraph {
+    pub fn neighbours(&self) -> Neighbours {
+        Neighbours { graph: self }
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////

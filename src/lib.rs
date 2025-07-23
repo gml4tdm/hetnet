@@ -4,22 +4,35 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 use std::collections::HashMap;
-use pyo3::exceptions::{PyException, PyValueError};
+use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 
-use shared_types::NodeRef;
-use crate::graph::{HeteroDiGraph, HeteroDiGraphBuilder, Node2VecArgs};
-use crate::meta_path::{MetaPath, PathComponent};
-use crate::shared_types::{EdgeRef, NodeDescriptor, EdgeDescriptor};
-use crate::walker::{GraphExplorer, NeighbourSelector, RandomWalkConfig, RandomWalker,
-                    UnweightedNeighbourSelector, WeightedNeighbourSelector};
+use hetnet::{
+    HeteroDiGraph,
+    HeteroDiGraphBuilder,
+    MetaPath,
+    NodeDescriptor, NodeRef,
+    EdgeDescriptor, EdgeRef,
+    walkers::{
+       UnweightedNeighbourSelector,
+       WeightedNeighbourSelector,
+       Node2VecArgs,
+       RandomWalkConfig,
+       GraphExplorer,
+       NeighbourSelector,
+       RandomWalker,
+    },
+    deduplication as dedup
+};
 
-pub mod graph;
-mod errors;
-pub mod meta_path;
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// Error Handling
+//////////////////////////////////////////////////////////////////////////////////////////////////
 
-mod shared_types;
-mod walker;
+fn convert_result<T, E: std::fmt::Display>(r: Result<T, E>) -> PyResult<T> {
+    r.map_err(|e| PyErr::new::<PyException, _>(format!("{}", e)))
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,7 +47,7 @@ struct PyMetaPath(MetaPath<String>);
 impl PyMetaPath {
     #[new]
     fn new(pattern: String) -> PyResult<Self> {
-        let inner = MetaPath::new(pattern)?;
+        let inner = convert_result(MetaPath::new(pattern))?;
         Ok(PyMetaPath(inner))
     }
 
@@ -43,30 +56,11 @@ impl PyMetaPath {
     }
 
     fn __repr__(&self) -> String {
-        let mut parts = vec![_format_mp_node(&self.0.start)];
-        for (edge, node) in self.0.steps.iter() {
-            parts.push(_format_mp_edge(edge));
-            parts.push(_format_mp_node(node));
-        }
-        format!("MetaPath(\"{}\")", parts.join(" "))
+        format!("MetaPath(\"{}\")", self.0)
     }
 }
 
-fn _format_mp_node(x: &PathComponent<String>) -> String {
-    match x {
-        PathComponent::Typed(inner) => format!("[{inner}]"),
-        PathComponent::Wildcard => "[*]".to_string(),
-    }
-}
-
-fn _format_mp_edge(e: &PathComponent<String>) -> String {
-    match e {
-        PathComponent::Typed(inner) => format!("-{{{inner}}}->"),
-        PathComponent::Wildcard => "->".to_string(),
-    }
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Graph Object
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -86,15 +80,42 @@ impl PyHeteroDiGraph {
     }
 
     fn node_properties(&self, node: PyNodeRef) -> PyResult<&HashMap<String, String>> {
-        Ok(self.0.node_properties(node.0)?)
+        Ok(convert_result(self.0.node_properties(node.0))?)
     }
 
     fn edge_properties(&self, uid: PyEdgeRef) -> PyResult<&HashMap<String, String>> {
-        Ok(self.0.edge_properties(uid.0)?)
+        Ok(convert_result(self.0.edge_properties(uid.0))?)
     }
 
-    fn deduplicate_edges(&self, types: Vec<String>) -> PyResult<Self> {
-        Ok(PyHeteroDiGraph(self.0.deduplicate_edges(types)?))
+    #[pyo3(signature = (types, *, data_handling, weight_handling))]
+    fn deduplicate_edges(&self,
+                         types: Vec<String>, 
+                         data_handling: String, 
+                         weight_handling: String) -> PyResult<Self> {
+        let dh = match data_handling.as_str() {
+            "discard" => dedup::DataHandling::Discard,
+            "enforce_identical" => dedup::DataHandling::EnforceIdentical,
+            x => {
+                return Err(PyErr::new::<PyException, _>(
+                    format!(
+                        "Invalid data handling '{x}', expected 'discard' or 'enforce_identical'"
+                    )
+                ));
+            }
+        };
+        let wh = match weight_handling.as_str() {
+            "set_to_one" => dedup::WeightHandling::SetToOne,
+            "enforce_identical" => dedup::WeightHandling::EnforceIdentical,
+            "sum_aggregate" => dedup::WeightHandling::SumAggregate,
+            x => {
+                return Err(PyErr::new::<PyException, _>(
+                    format!(
+                        "Invalid weight handling '{x}', expected 'set_to_one', 'enforce_identical', or 'sum_aggregate'"
+                    )
+                ));
+            }
+        };
+        Ok(PyHeteroDiGraph(convert_result(self.0.deduplicate_edges(types, dh, wh))?))
     }
 
     #[pyo3(signature = (meta_paths, *, unique_nodes = true))]
@@ -104,12 +125,14 @@ impl PyHeteroDiGraph {
         let meta_paths = meta_paths.into_iter()
             .map(|(name, meta_path)| (name, meta_path.0))
             .collect();
-        Ok(PyHeteroDiGraph(self.0.meta_path_subgraph(meta_paths, unique_nodes)?))
+        Ok(PyHeteroDiGraph(
+            convert_result(self.0.meta_path_subgraph(meta_paths, unique_nodes))?
+        ))
     }
 
     #[pyo3(signature = (start, *, weighted = true, path_length = 10, p = 1.0, q = 1.0))]
     fn random_walk(&mut self, start: PyNodeRef, weighted: bool, path_length: usize, p: f64, q: f64) -> PyResult<Vec<PyNodeRef>> {
-        let args = Node2VecArgs { p, q };
+        let args = Node2VecArgs::new(p, q);
         self.random_walk_helper(start, weighted, path_length, self.0.neighbours(), args)
     }
 
@@ -121,7 +144,7 @@ impl PyHeteroDiGraph {
                                 p: f64,
                                 q: f64,
                                 n_iter: usize) -> PyResult<HashMap<PyNodeRef, usize>> {
-        let args = Node2VecArgs { p , q };
+        let args = Node2VecArgs::new(p, q);
         self.random_walk_dist_helper(start, weighted, path_length, self.0.neighbours(), args, n_iter)
     }
 }
@@ -164,7 +187,7 @@ impl PyHeteroDiGraph {
                 .with_path_length(path_length)
                 .with_selector_config(args)
         );
-        let path = walker.walk_from(start.0)?;
+        let path = convert_result(walker.walk_from(start.0))?;
         Ok(path.into_iter().map(PyNodeRef).collect())
     }
 
@@ -207,7 +230,7 @@ impl PyHeteroDiGraph {
                 .with_path_length(path_length)
                 .with_selector_config(args)
         );
-        let dist = walker.distribution(start.0, n_iter)?;
+        let dist = convert_result(walker.distribution(start.0, n_iter))?;
         Ok(
             dist.into_iter().map(|(k, v)| (PyNodeRef(k), v)).collect()
         )
@@ -279,12 +302,12 @@ struct PyNodeDescriptor(NodeDescriptor);
 impl PyNodeDescriptor {
     #[getter]
     fn r#type(&self) -> String {
-        self.0.r#type.clone()
+        self.0.r#type().to_string()
     }
 
     #[getter]
     fn uid(&self) -> PyNodeRef {
-        PyNodeRef(self.0.uid)
+        PyNodeRef(self.0.uid())
     }
 }
 
@@ -296,27 +319,27 @@ struct PyEdgeDescriptor(EdgeDescriptor);
 impl PyEdgeDescriptor {
     #[getter]
     fn source(&self) -> PyNodeRef {
-        PyNodeRef(self.0.from)
+        PyNodeRef(self.0.from())
     }
 
     #[getter]
     fn destination(&self) -> PyNodeRef {
-        PyNodeRef(self.0.to)
+        PyNodeRef(self.0.to())
     }
 
     #[getter]
     fn r#type(&self) -> String {
-        self.0.r#type.clone()
+        self.0.r#type().to_string()
     }
 
     #[getter]
     fn uid(&self) -> PyEdgeRef {
-        PyEdgeRef(self.0.uid)
+        PyEdgeRef(self.0.uid())
     }
 
     #[getter]
     fn weight(&self) -> f64 {
-        self.0.weight
+        self.0.weight()
     }
 }
 
@@ -332,7 +355,7 @@ struct PyNodeRef(NodeRef);
 #[pymethods]
 impl PyNodeRef {
     fn __repr__(&self) -> String {
-        format!("NodeRef<{}>", self.0.0)
+        format!("{}", self.0)
     }
 }
 
@@ -344,7 +367,7 @@ struct PyEdgeRef(EdgeRef);
 #[pymethods]
 impl PyEdgeRef {
     fn __repr__(&self) -> String {
-        format!("EdgeRef<{}>", self.0.0)
+        format!("{}", self.0)
     }
 }
 

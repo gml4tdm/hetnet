@@ -4,6 +4,7 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::sync::Arc;
 
 use crate::{NodeDescriptor, EdgeDescriptor};
@@ -64,6 +65,12 @@ pub struct NodeRef {
     pub(crate) node_uid: usize
 }
 
+impl Display for NodeRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "NodeRef<graph={}, edge={}>", self.graph_uid, self.node_uid)
+    }
+}
+
 impl NodeRef {
     pub(crate) fn downgrade(&self) -> RawNodeRef {
         RawNodeRef(self.node_uid)
@@ -74,6 +81,12 @@ impl NodeRef {
 pub struct EdgeRef {
     pub(crate) graph_uid: usize,
     pub(crate) edge_uid: usize
+}
+
+impl Display for EdgeRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "EdgeRef<graph={}, edge={}>", self.graph_uid, self.edge_uid)
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]

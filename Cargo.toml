@@ -1,5 +1,5 @@
 [package]
-name = "hetnet"
+name = "py-hetnet"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,3 +12,4 @@ crate-type = ["cdylib"]
 error_set = "0.8.5"
 pyo3 = "0.25.1"
 rand = "0.9.1"
+hetnet = { path = "./rust/hetnet" }
