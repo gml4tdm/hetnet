@@ -64,6 +64,12 @@ pub struct NodeRef {
     pub(crate) node_uid: usize
 }
 
+impl NodeRef {
+    pub(crate) fn downgrade(&self) -> RawNodeRef {
+        RawNodeRef(self.node_uid)
+    }
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct EdgeRef {
     pub(crate) graph_uid: usize,
