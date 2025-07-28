@@ -49,11 +49,12 @@ class Graph:
                  index: str | list[str] | None = None):
         self._graph = base_graph
         self._cache = {}
-        self._raw_index = index
         if index is None:
             self._index = _GraphIndex(mapping={}, key=())
+            self._raw_index = None
         else:
             keys = [index] if isinstance(index, str) else index
+            self._raw_index = tuple(keys)
             mapping = {}
             for descriptor in self._graph.node_list():
                 ref = descriptor.uid
@@ -116,12 +117,18 @@ class Graph:
             start, weighted=weighted, path_length=path_length, n_iter=n_iter
         )
 
-    def to_dot_graph(self, *, aggregated_edges: bool = True):
+    def to_dot_graph(self, *,
+                     aggregated_edges: bool = False):
         graph = graphviz.Digraph()
         for descriptor in self.node_list():
             uid = descriptor.uid
             kind = descriptor.type
-            graph.node(str(uid), label=kind)
+            if self._raw_index is not None and len(self._raw_index) == 1:
+                prop = self.node_properties(uid)
+                label = f'{prop[self._raw_index[0]]} ({kind}))'
+            else:
+                label = kind
+            graph.node(str(uid), label=label)
         if aggregated_edges:
             agg = collections.defaultdict(float)
             for descriptor in self.edge_list():
