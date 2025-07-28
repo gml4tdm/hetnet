@@ -71,6 +71,10 @@ struct PyHeteroDiGraph(HeteroDiGraph);
 
 #[pymethods]
 impl PyHeteroDiGraph {
+    fn node_info(&self, node: PyNodeRef) -> PyResult<PyNodeDescriptor> {
+        Ok(PyNodeDescriptor(convert_result(self.0.node_info(node.0))?))
+    }
+
     fn node_list(&self) -> Vec<PyNodeDescriptor> {
         self.0.node_list().into_iter().map(PyNodeDescriptor).collect()
     }
@@ -85,6 +89,17 @@ impl PyHeteroDiGraph {
 
     fn edge_properties(&self, uid: PyEdgeRef) -> PyResult<&HashMap<String, String>> {
         Ok(convert_result(self.0.edge_properties(uid.0))?)
+    }
+
+    fn update_weights(&self, weights: HashMap<PyEdgeRef, f64>) -> PyResult<Self> {
+        let conv = weights.into_iter()
+            .map(|(PyEdgeRef(k), v)| (k, v))
+            .collect();
+        Ok(PyHeteroDiGraph(convert_result(self.0.update_weights(conv))?))
+    }
+
+    fn to_markov_graph(&self) -> Self {
+        PyHeteroDiGraph(self.0.to_markov_graph())
     }
 
     #[pyo3(signature = (types, *, data_handling, weight_handling))]

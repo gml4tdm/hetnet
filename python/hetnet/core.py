@@ -38,7 +38,7 @@ class GraphBuilder:
             source, destination, kind, weight=weight, properties=properties
         )
 
-    def build(self, index: str | list[str] | None = None) -> Graph:
+    def build(self, index: str | list[str] | tuple[str, ...] | None = None) -> Graph:
         return Graph(self._builder.build(), index=index)
 
 
@@ -46,7 +46,7 @@ class Graph:
 
     def __init__(self,
                  base_graph: _hetnet.Graph, *,
-                 index: str | list[str] | None = None):
+                 index: str | list[str] | tuple[str, ...] | None = None):
         self._graph = base_graph
         self._cache = {}
         if index is None:
@@ -69,17 +69,33 @@ class Graph:
     def index(self) -> _GraphIndex:
         return self._index
 
+    def node_info(self, node: NodeRef, /) -> NodeDescriptor:
+        return self._graph.node_info(node)
+
     def node_list(self) -> list[NodeDescriptor]:
         return self._graph.node_list()
 
     def edge_list(self) -> list[EdgeDescriptor]:
         return self._graph.edge_list()
 
+    def edges_by_node(self) -> dict[NodeRef, list[EdgeDescriptor]]:
+        result = {}
+        for descriptor in self.edge_list():
+            col = result.setdefault(descriptor.source, [])
+            col.append(descriptor)
+        return result
+
     def node_properties(self, node: NodeRef) -> dict[str, str]:
         return self._graph.node_properties(node)
 
     def edge_properties(self, edge: EdgeRef) -> dict[str, str]:
         return self._graph.edge_properties(edge)
+
+    def update_weights(self, weigths: dict[EdgeRef, float]) -> Graph:
+        return Graph(self._graph.update_weights(weigths), index=self._raw_index)
+
+    def to_markov_graph(self) -> Graph:
+        return Graph(self._graph.to_markov_graph(), index=self._raw_index)
 
     def deduplicate_edges(
         self,
@@ -96,7 +112,7 @@ class Graph:
     def meta_path_subgraph(self,
                            metapaths: dict[str, MetaPath], *,
                            unique_nodes=True,
-                           index: str | list[str] | None = None) -> Graph:
+                           index: str | list[str] | tuple[str, ...] | None = None) -> Graph:
         return Graph(
             self._graph.meta_path_subgraph(metapaths, unique_nodes=unique_nodes),
             index=index

@@ -86,6 +86,46 @@ def _parse_properties(line: str):
     parts = map(str.strip, line.split(","))
     properties = {}
     for part in parts:
-        key, value = part.split(":")
+        key, remainder = _parse_string(line)
+        if not remainder.startswith(':'):
+            raise ValueError(f"Invalid properties line: {line}")
+        value, remainder = _parse_string(remainder[1:])
+        if remainder:
+            raise ValueError(f"Invalid properties line: {line}")
         properties[key.strip()] = value.strip()
     return properties
+
+
+def _parse_string(line: str):
+    if line.startswith('"'):
+        return _parse_quoted_string(line)
+    else:
+        return _parse_unquoted_string(line)
+
+
+def _parse_unquoted_string(line: str):
+    pattern = re.compile(r'^\w+')
+    m = pattern.match(line)
+    if not m:
+        raise ValueError(f"Invalid string: {line}")
+    return m.group(0), line[m.end():]
+
+
+def _parse_quoted_string(line: str):
+    parts = []
+    pos = 0
+    escaped = False
+    while pos < len(line):
+        pos += 1
+        if escaped:
+            parts.append(line[pos])
+            escaped = False
+        elif line[pos] == '\\':
+            escaped = True
+        elif line[pos] == '"':
+            break
+        else:
+            parts.append(line[pos])
+    if pos == len(line):
+        raise ValueError(f"Unterminated string: {line}")
+    return "".join(parts), line[pos+1:]

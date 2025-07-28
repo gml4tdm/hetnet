@@ -128,7 +128,8 @@ impl HeteroDiGraphBuilder {
             edge_properties: self.edge_properties,
         };
         let graph_metadata = GraphMetadata {
-            next_edge_id: self.next_edge_id
+            next_edge_id: self.next_edge_id,
+            is_markov: false
         };
 
         HeteroDiGraph {

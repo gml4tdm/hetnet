@@ -23,10 +23,11 @@ pub trait GraphExplorer {
                   config: &Self::Config) -> Result<HashMap<RawNodeRef, f64>, HetNetError>;
     
     fn graph_uid(&self) -> usize;
+    fn is_markov_graph(&self) -> bool;
 }
 
 pub trait NeighbourSelector {
-    fn select(&mut self, from: &[(RawNodeRef, f64)]) -> RawNodeRef;
+    fn select(&mut self, from: &[(RawNodeRef, f64)], is_markov: bool) -> RawNodeRef;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,7 +53,7 @@ impl<T: rand::Rng> UnweightedNeighbourSelector<T> {
 
 impl<T: rand::Rng> NeighbourSelector for UnweightedNeighbourSelector<T> {
 
-    fn select(&mut self, from: &[(RawNodeRef, f64)]) -> RawNodeRef {
+    fn select(&mut self, from: &[(RawNodeRef, f64)], _is_markov: bool) -> RawNodeRef {
         let index = self.rng.random_range(0..from.len());
         from[index].0
     }
@@ -77,17 +78,37 @@ impl<T: rand::Rng> WeightedNeighbourSelector<T> {
 
 impl<T: rand::Rng> NeighbourSelector for WeightedNeighbourSelector<T> {
 
-    fn select(&mut self, from: &[(RawNodeRef, f64)]) -> RawNodeRef {
-        let mut hist = Vec::new();
-        let mut total = 0.0;
-        for (_, count) in from.iter().copied() {
-            total += count;
-            hist.push(total);
-        }
+    fn select(&mut self, from: &[(RawNodeRef, f64)], is_markov: bool) -> RawNodeRef {
+        if is_markov {
+            // For markov (pre-normalised) graphs,
+            // we do not have to compute the histogram;
+            // We can roll the choice directly and just use 
+            // linear search (which is _at_ worst as expensive 
+            // as computing the histogram) to find the reference;
+            // We always avoid the secondary binary search.
+            let selected = self.rng.random::<f64>();
+            let mut skipped = 0.0;
+            for (node_ref, w) in from {
+                if skipped + w > selected {
+                    skipped += w;
+                } else {
+                    return *node_ref;
+                }
+            }
+            // Should not happen, but let's make this robust
+            from[from.len() - 1].0
+        } else {
+            let mut hist = Vec::new();
+            let mut total = 0.0;
+            for (_, count) in from.iter().copied() {
+                total += count;
+                hist.push(total);
+            }
 
-        let selected = self.rng.random_range(0.0..total);
-        let index = hist.partition_point(|&x| x <= selected);
-        from[index].0
+            let selected = self.rng.random_range(0.0..total);
+            let index = hist.partition_point(|&x| x <= selected);
+            from[index].0
+        }
     }
 }
 
@@ -140,6 +161,7 @@ impl<G: GraphExplorer, N: NeighbourSelector> RandomWalker<G, N> {
             return Err(HetNetError::InvalidReference);
         }
         
+        let is_markov = self.explorer.is_markov_graph();
         let mut path = vec![start];
         let mut current = start.downgrade();
         let mut state = G::State::default();
@@ -149,7 +171,7 @@ impl<G: GraphExplorer, N: NeighbourSelector> RandomWalker<G, N> {
                 current, &mut state, &self.config.explorer_args
             )?;
             let histogram = neighbours.into_iter().collect::<Vec<_>>();
-            current = self.selector.select(&histogram);
+            current = self.selector.select(&histogram, is_markov);
             path.push(current.upgrade(self.explorer.graph_uid()));
         }
 

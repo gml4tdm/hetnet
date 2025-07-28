@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::Arc;
 
-use crate::{NodeDescriptor, EdgeDescriptor};
+use crate::{NodeDescriptor, EdgeDescriptor, HetNetResult, HetNetError};
 use crate::errors::GraphQueryingError;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,7 +26,8 @@ pub struct HeteroDiGraph {
 
 #[derive(Debug)]
 pub(crate) struct GraphMetadata {
-    pub(crate) next_edge_id: usize
+    pub(crate) next_edge_id: usize,
+    pub(crate) is_markov: bool,
 }
 
 #[derive(Debug)]
@@ -67,7 +68,7 @@ pub struct NodeRef {
 
 impl Display for NodeRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "NodeRef<graph={}, edge={}>", self.graph_uid, self.node_uid)
+        write!(f, "NodeRef<graph={}, node={}>", self.graph_uid, self.node_uid)
     }
 }
 
@@ -105,6 +106,15 @@ impl RawNodeRef {
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 impl HeteroDiGraph {
+    pub fn node_info(&self, node: NodeRef) -> HetNetResult<NodeDescriptor> {
+        if node.graph_uid != self.uid {
+            return Err(HetNetError::InvalidReference);
+        }
+        let type_id = self.nodes[node.node_uid].r#type;
+        let type_name = self.node_metadata.node_types[type_id].clone();
+        Ok(NodeDescriptor { uid: node, r#type: type_name })
+    }
+
     pub fn node_list(&self) -> Vec<NodeDescriptor> {
         let mut result = Vec::with_capacity(self.nodes.len());
         let metadata = &*self.node_metadata;

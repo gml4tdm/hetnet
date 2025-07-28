@@ -81,7 +81,8 @@ impl SubgraphBuilder {
             node_metadata: graph.node_metadata.clone(),
             graph_metadata: Arc::new(
                 GraphMetadata {
-                    next_edge_id: self.next_edge_id
+                    next_edge_id: self.next_edge_id,
+                    is_markov: false    // Markov state is lost 
                 }
             ),
             edge_metadata: Arc::new(

@@ -73,6 +73,10 @@ impl<'a> super::walkers::GraphExplorer for Neighbours<'a> {
         self.graph.uid
     }
 
+    fn is_markov_graph(&self) -> bool {
+        self.graph.graph_metadata.is_markov
+    }
+
     fn neighbours(
         &self,
         RawNodeRef(uid): RawNodeRef,
