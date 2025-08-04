@@ -82,7 +82,9 @@ impl SubgraphBuilder {
             graph_metadata: Arc::new(
                 GraphMetadata {
                     next_edge_id: self.next_edge_id,
-                    is_markov: false    // Markov state is lost 
+                    is_markov: false,    // Markov state is lost 
+                    distance_matrix: None,
+                    weighted_distance_matrix: None
                 }
             ),
             edge_metadata: Arc::new(

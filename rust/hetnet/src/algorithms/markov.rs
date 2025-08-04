@@ -9,7 +9,9 @@ impl HeteroDiGraph {
             uid: next_graph_id(),
             graph_metadata: Arc::new(GraphMetadata {
                 next_edge_id: self.graph_metadata.next_edge_id,
-                is_markov: true
+                is_markov: true,
+                distance_matrix: self.graph_metadata.distance_matrix.clone(),
+                weighted_distance_matrix: None
             }),
             node_metadata: self.node_metadata.clone(),
             edge_metadata: self.edge_metadata.clone(),
