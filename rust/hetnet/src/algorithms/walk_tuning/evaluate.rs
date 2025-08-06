@@ -28,7 +28,7 @@ impl<G: GraphExplorer, N: NeighbourSelector> EvalArgs<G, N> {
     pub fn new(explorer: G, selector: N, config: RandomWalkConfig<G>) -> Self {
         Self { explorer, selector, config, n_rounds: 1 }
     }
-    
+
     pub fn with_n_rounds(mut self, n_rounds: u32) -> Self {
         self.n_rounds = n_rounds;
         self
@@ -47,15 +47,15 @@ impl EvalResult {
     pub fn exploration_density_at_distance(&self) -> &Vec<f64> {
         &self.exploration_density
     }
-    
+
     pub fn cumulative_exploration_density_at_distance(&self) -> &Vec<f64> {
         &self.cumulative_exploration_density
     }
-    
+
     pub fn max_dist(&self) -> f64 {
         self.max_dist
     }
-    
+
     pub fn exploration_density_at_max_dist(&self) -> f64 {
         self.max_dist_exploration_density
     }
@@ -70,20 +70,21 @@ where
     G: GraphExplorer,
     N: NeighbourSelector
 {
-    let mut summed_exploration_density = Vec::<f64>::new();
-    let mut summed_cumulative_exploration_density = Vec::<f64>::new();
+    let mut summed_exploration_density = vec![0.0; config.config.path_length + 1];
+    let mut summed_cumulative_exploration_density = vec![0.0; config.config.path_length + 1];
     let mut summed_max_dist = 0.0;
     let mut summed_max_dist_exploration_density = 0.0;
-    let mut total_runs_by_dist = Vec::<f64>::new();
+    let mut total_runs_by_dist = vec![0.0; config.config.path_length + 1];
     let mut total_runs = 0.0;
-    
+    let mut max_dist = 0usize;
+
     let distance_matrix = graph.sparse_distance_matrix(
         config.config.path_length
     );
     let mut nodes_by_distance_matrix = Vec::new();
     for distances in distance_matrix.iter() {
         let max_dist = distances.values().max().copied().expect("Empty distance vector");
-        let mut hist = vec![HashSet::new(); max_dist];
+        let mut hist = vec![HashSet::new(); max_dist + 1];
         for (node, dist) in distances.iter() {
             hist[*dist].insert(*node);
         }
@@ -95,7 +96,7 @@ where
         config.selector,
         config.config
     );
-    
+
     for node in graph.nodes.iter() {
         let start = RawNodeRef(node.uid).upgrade(graph.uid);
         if !on_nodes.contains(&start) {
@@ -115,6 +116,7 @@ where
             summed_max_dist_exploration_density = cumulative_coverage_per_level.last()
                 .copied()
                 .expect("Empty cumulative coverage");
+            max_dist = usize::max(max_dist, coverage_per_level.len());
             for (i, x) in coverage_per_level.into_iter().enumerate() {
                 total_runs_by_dist[i] += 1.0;
                 summed_exploration_density[i] += x;
@@ -124,6 +126,10 @@ where
             }
         }
     }
+
+    summed_exploration_density.truncate(max_dist + 1);
+    summed_cumulative_exploration_density.truncate(max_dist + 1);
+    total_runs_by_dist.truncate(max_dist + 1);
 
     Ok(
         EvalResult {

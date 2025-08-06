@@ -4,7 +4,6 @@ import collections
 import typing
 
 import graphviz
-from python.hetnet._hetnet import RandomWalkEvalResult
 
 try:
     from . import _hetnet
