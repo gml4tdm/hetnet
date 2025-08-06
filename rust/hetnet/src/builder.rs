@@ -130,8 +130,6 @@ impl HeteroDiGraphBuilder {
         let graph_metadata = GraphMetadata {
             next_edge_id: self.next_edge_id,
             is_markov: false,
-            distance_matrix: None,
-            weighted_distance_matrix: None,
         };
 
         HeteroDiGraph {

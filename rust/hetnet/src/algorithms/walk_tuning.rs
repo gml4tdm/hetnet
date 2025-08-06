@@ -1,3 +1,4 @@
-mod evaluate;
+pub mod evaluate;
+mod distance;
 
 

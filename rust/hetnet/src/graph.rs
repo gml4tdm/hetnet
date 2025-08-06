@@ -28,8 +28,6 @@ pub struct HeteroDiGraph {
 pub(crate) struct GraphMetadata {
     pub(crate) next_edge_id: usize,
     pub(crate) is_markov: bool,
-    pub(crate) distance_matrix: Option<Arc<Vec<usize>>>,
-    pub(crate) weighted_distance_matrix: Option<Arc<Vec<f64>>>,
 }
 
 #[derive(Debug)]

@@ -32,4 +32,12 @@ pub mod walkers {
         NeighbourSelector,
         RandomWalker
     };
+
+    pub mod tuning {
+        pub mod eval {
+            pub use crate::algorithms::walk_tuning::evaluate::EvalArgs;
+            pub use crate::algorithms::walk_tuning::evaluate::EvalResult;
+            pub use crate::algorithms::walk_tuning::evaluate::evaluate_random_walk_config;
+        }
+    }
 }

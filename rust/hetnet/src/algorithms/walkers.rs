@@ -119,7 +119,7 @@ impl<T: rand::Rng> NeighbourSelector for WeightedNeighbourSelector<T> {
 
 
 pub struct RandomWalkConfig<T: GraphExplorer> {
-    path_length: usize,
+    pub(crate) path_length: usize,
     explorer_args: T::Config
 }
 
