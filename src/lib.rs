@@ -3,7 +3,7 @@
 // Imports and modules
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 
@@ -24,7 +24,7 @@ use hetnet::{
     },
     deduplication as dedup
 };
-
+use hetnet::walkers::tuning::eval::evaluate_random_walk_config;
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Error Handling
@@ -191,6 +191,21 @@ impl PyHeteroDiGraph {
         let args = Node2VecArgs::new(p, q);
         self.random_walk_dist_helper(start, weighted, path_length, self.0.neighbours(), args, n_iter)
     }
+
+    #[pyo3(signature = (*, on_nodes, weighted = true, path_length = 10, p = 1.0, q = 1.0, n_iter = 100))]
+    fn evaluate_random_walk_settings(&mut self,
+                                     on_nodes: HashSet<PyNodeRef>,
+                                     weighted: bool,
+                                     path_length: usize,
+                                     p: f64,
+                                     q: f64,
+                                     n_iter: usize) -> PyResult<PyRandomWalkEvalResult>
+    {
+        let args = Node2VecArgs::new(p, q);
+        self.random_walk_eval_helper(
+            on_nodes, weighted, path_length, self.0.neighbours(), args, n_iter
+        )
+    }
 }
 
 impl PyHeteroDiGraph {
@@ -278,6 +293,83 @@ impl PyHeteroDiGraph {
         Ok(
             dist.into_iter().map(|(k, v)| (PyNodeRef(k), v)).collect()
         )
+    }
+
+    fn random_walk_eval_helper<T>(&self,
+                                  on_nodes: HashSet<PyNodeRef>,
+                                  weighted: bool,
+                                  path_length: usize,
+                                  explorer: T,
+                                  args: T::Config,
+                                  n_iter: usize) -> PyResult<PyRandomWalkEvalResult>
+    where
+        T: GraphExplorer,
+    {
+        if weighted {
+            self.random_walk_eval_helper_2(
+                on_nodes, path_length, explorer, args, UnweightedNeighbourSelector::default(), n_iter
+            )
+        } else {
+            self.random_walk_eval_helper_2(
+                on_nodes, path_length, explorer, args, WeightedNeighbourSelector::default(), n_iter
+            )
+        }
+    }
+
+    fn random_walk_eval_helper_2<T, R>(&self,
+                                       on_nodes: HashSet<PyNodeRef>,
+                                       path_length: usize,
+                                       explorer: T,
+                                       args: T::Config,
+                                       selector: R,
+                                       n_iter: usize) -> PyResult<PyRandomWalkEvalResult>
+    where
+        T: GraphExplorer,
+        R: NeighbourSelector
+    {
+        let config = RandomWalkConfig::default()
+            .with_selector_config(args)
+            .with_path_length(path_length);
+        let eval_args = hetnet::walkers::tuning::eval::EvalArgs::new(
+            explorer, selector, config)
+            .with_n_rounds(n_iter as u32);
+        let eval_result = evaluate_random_walk_config(
+            &self.0,
+            on_nodes.into_iter().map(|PyNodeRef(x)| x).collect(),
+            eval_args
+        );
+        Ok(PyRandomWalkEvalResult(convert_result(eval_result)?))
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// Random Walk Evaluation Result
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[pyclass(name = "RandomWalkEvalResult")]
+struct PyRandomWalkEvalResult(hetnet::walkers::tuning::eval::EvalResult);
+
+#[pymethods]
+impl PyRandomWalkEvalResult {
+    #[getter]
+    fn exploration_density_at_distance(&self) -> &Vec<f64> {
+        self.0.exploration_density_at_distance()
+    }
+
+    #[getter]
+    fn cumulative_exploration_density_at_distance(&self) -> &Vec<f64> {
+        self.0.cumulative_exploration_density_at_distance()
+    }
+
+    #[getter]
+    fn max_dist(&self) -> f64 {
+        self.0.max_dist()
+    }
+
+    #[getter]
+    fn exploration_density_at_max_dist(&self) -> f64 {
+        self.0.exploration_density_at_max_dist()
     }
 }
 
@@ -430,5 +522,6 @@ fn _hetnet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyEdgeDescriptor>()?;
     m.add_class::<PyNodeRef>()?;
     m.add_class::<PyEdgeRef>()?;
+    m.add_class::<PyRandomWalkEvalResult>()?;
     Ok(())
 }

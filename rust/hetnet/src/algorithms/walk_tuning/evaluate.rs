@@ -56,8 +56,8 @@ impl EvalResult {
         self.max_dist
     }
     
-    pub fn max_dist_at_exploration_density(&self) -> &f64 {
-        &self.max_dist_exploration_density
+    pub fn exploration_density_at_max_dist(&self) -> f64 {
+        self.max_dist_exploration_density
     }
 }
 

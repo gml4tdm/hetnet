@@ -4,6 +4,7 @@ import collections
 import typing
 
 import graphviz
+from python.hetnet._hetnet import RandomWalkEvalResult
 
 try:
     from . import _hetnet
@@ -18,6 +19,8 @@ NodeRef = _hetnet.NodeRef
 EdgeRef = _hetnet.EdgeRef
 NodeDescriptor = _hetnet.NodeDescriptor
 EdgeDescriptor = _hetnet.EdgeDescriptor
+
+RandomWalkEvalResult = _hetnet.RandomWalkEvalResult
 
 
 class GraphBuilder:
@@ -121,16 +124,33 @@ class Graph:
     def random_walk(self,
                     start: NodeRef, *,
                     weighted: bool = True,
-                    path_length: int = 10) -> list[NodeRef]:
-        return self._graph.random_walk(start, weighted=weighted, path_length=path_length)
+                    path_length: int = 10,
+                    p: float = 1.0,
+                    q: float = 1.0) -> list[NodeRef]:
+        return self._graph.random_walk(
+            start, weighted=weighted, path_length=path_length, p=p, q=q
+        )
 
     def random_walk_distribution(self,
                                  start: NodeRef, *,
                                  weighted: bool = True,
                                  path_length: int = 10,
+                                 p: float = 1.0,
+                                 q: float = 1.0,
                                  n_iter: int = 100) -> dict[NodeRef, int]:
         return self._graph.random_walk_distribution(
-            start, weighted=weighted, path_length=path_length, n_iter=n_iter
+            start, weighted=weighted, path_length=path_length, n_iter=n_iter, p=p, q=q
+        )
+
+    def evaluate_random_walk_settings(self, *,
+                                      on_nodes: set[NodeRef],
+                                      weighted: bool = True,
+                                      path_length: int = 10,
+                                      p: float = 1.0,
+                                      q: float = 1.0,
+                                      n_iter: int = 100) -> RandomWalkEvalResult:
+        return self._graph.evaluate_random_walk_settings(
+            on_nodes=on_nodes, weighted=weighted, path_length=path_length, p=p, q=q, n_iter=n_iter
         )
 
     def to_dot_graph(self, *,
