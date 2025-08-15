@@ -1,8 +1,50 @@
 import datetime
+import json
+import pathlib
 
 import neo4j
 
 from .core import Graph, GraphBuilder
+
+
+def load_json(filename: pathlib.Path | str, *,
+              directed: bool = True,
+              index=None) -> Graph:
+    builder = GraphBuilder()
+    nodes = {}
+    with open(filename) as f:
+        for record in map(json.loads, f):
+            if record['type'] == 'node':
+                if len(record['labels']) != 1:
+                    raise ValueError('Only support single-label nodes')
+                nodes[record['id']] = builder.add_node(
+                    kind=record['labels'][0],
+                    properties={
+                        k: str(v) if not isinstance(v, str) else v
+                        for k, v in record['properties'].items()
+                    },
+                )
+            elif record['type'] == 'relationship':
+                props = {
+                    k: str(v) if not isinstance(v, str) else v
+                    for k, v in record['properties'].items()
+                }
+                builder.add_edge(
+                    source=nodes[record['start']['id']],
+                    destination=nodes[record['end']['id']],
+                    kind=record['label'],
+                    properties=props
+                )
+                if not directed:
+                    builder.add_edge(
+                        source=nodes[record['end']['id']],
+                        destination=nodes[record['start']['id']],
+                        kind=record['label'],
+                        properties=props
+                    )
+            else:
+                raise ValueError(f'Unknown record type: {record["type"]}')
+    return builder.build(index=index)
 
 
 def load_graph(uri: str, *,
@@ -11,7 +53,7 @@ def load_graph(uri: str, *,
                index=None) -> Graph:
     with neo4j.GraphDatabase.driver(uri, auth=auth) as driver:
         records, _, _ = driver.execute_query(
-            """MATCH (n) OPTIONAL MATCH (n)-[r]-(m) 
+            """MATCH (n) OPTIONAL MATCH (n)-[r]-(m)
             RETURN COLLECT(DISTINCT n) AS nodes, COLLECT(DISTINCT r) AS relationships"""
         )
         builder = GraphBuilder()
