@@ -68,9 +68,9 @@ def _to_torch_info(g: Graph):
     edge_index_to = []
 
     for node, edges in g.edges_by_node().items():
-        fr_uid = mapping.get(node, len(mapping))
+        fr_uid = mapping.setdefault(node, len(mapping))
         for edge in edges:
-            to_uid = mapping.get(edge.destination, len(mapping))
+            to_uid = mapping.setdefault(edge.destination, len(mapping))
             edge_index_from.append(fr_uid)
             edge_index_to.append(to_uid)
 
