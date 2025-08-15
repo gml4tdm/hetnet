@@ -86,7 +86,7 @@ def _parse_properties(line: str):
     parts = map(str.strip, line.split(","))
     properties = {}
     for part in parts:
-        key, remainder = _parse_string(line)
+        key, remainder = _parse_string(part)
         if not remainder.startswith(':'):
             raise ValueError(f"Invalid properties line: {line}")
         value, remainder = _parse_string(remainder[1:])

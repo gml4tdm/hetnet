@@ -13,11 +13,12 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
     "neo4j",
-    "graphviz"
+    "graphviz",
+    "torch",
+    "torch_geometric",
 ]
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
 python-source = "python"
 module-name = "hetnet._hetnet"
-

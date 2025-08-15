@@ -40,7 +40,7 @@ def draw(graph: core.Graph | networkx.Graph):
 
     for u, v, data in graph.edges(data=True):
         w = data['weight']
-        color = pyplot.cm.viridis(w / max_weight)
+        color = pyplot.cm.viridis(w / max_weight)       # type: ignore
         patch = matplotlib.patches.FancyArrowPatch(
             posA=pos[u], posB=pos[v],
             connectionstyle='arc3,rad=0.15',
@@ -49,6 +49,6 @@ def draw(graph: core.Graph | networkx.Graph):
             linewidth=10 * w / max_weight,
             alpha=0.8
         )
-        ax.add_patch(patch)
+        ax.add_patch(patch)     # type: ignore
 
     return fig, ax
