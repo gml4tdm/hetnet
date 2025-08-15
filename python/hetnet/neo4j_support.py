@@ -21,13 +21,13 @@ def load_json(filename: pathlib.Path | str, *,
                     kind=record['labels'][0],
                     properties={
                         k: str(v) if not isinstance(v, str) else v
-                        for k, v in record['properties'].items()
+                        for k, v in record.get('properties', {}).items()
                     },
                 )
             elif record['type'] == 'relationship':
                 props = {
                     k: str(v) if not isinstance(v, str) else v
-                    for k, v in record['properties'].items()
+                    for k, v in record.get('properties', {}).items()
                 }
                 builder.add_edge(
                     source=nodes[record['start']['id']],
