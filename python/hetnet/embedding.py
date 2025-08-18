@@ -1,6 +1,5 @@
 import torch
 import torch_geometric.nn
-import torch_geometric.utils
 
 from .core import Graph
 
