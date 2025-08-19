@@ -48,10 +48,13 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
         self.p = p
         self.q = q
         self.num_negative_samples = num_negative_samples
-        self.num_nodes = len(graph.node_list())
+        self.num_nodes = len(self.graph.node_list())
         self.node_to_index_mapping = {
-            node.uid: i for i, node in enumerate(graph.node_list())
+            node.uid: i for i, node in enumerate(self.graph.node_list())
         }
+        self.index_to_node_mapping = [None] * self.num_nodes
+        for node, idx in self.node_to_index_mapping.items():
+            self.index_to_node_mapping[idx] = node      # type: ignore
         self.negative_sampling_strategy = negative_sampling_strategy
         if self.negative_sampling_strategy == 'uniform':
             self.unigram_walks_per_node = None
@@ -98,7 +101,7 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
         return self.model(x)
 
     def loader(self, **kwargs):
-        return torch.utils.data.DataLoder(
+        return torch.utils.data.DataLoader(
             range(self.num_nodes), collate_fn=self._sample, **kwargs
         )
 
@@ -110,7 +113,7 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
     def _sample_positives(self, batch: torch.Tensor):
         batch = batch.repeat(self.walks_per_node)
         rw = self.graph.random_walks(
-            batch.tolist(),
+            [self.index_to_node_mapping[idx] for idx in batch.tolist()],
             weighted=self.weighted,
             path_length=self.walk_length,
             p=self.p,

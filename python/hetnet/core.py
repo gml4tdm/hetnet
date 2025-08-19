@@ -67,6 +67,9 @@ class Graph:
                 mapping[node_key] = ref
             self._index = _GraphIndex(mapping=mapping, key=tuple(keys))
 
+    def __repr__(self) -> str:
+        return repr(self._graph)
+
     @property
     def index(self) -> _GraphIndex:
         return self._index

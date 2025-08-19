@@ -106,6 +106,10 @@ impl RawNodeRef {
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 impl HeteroDiGraph {
+    pub fn uid(&self) -> usize {
+        self.uid
+    }
+
     pub fn node_info(&self, node: NodeRef) -> HetNetResult<NodeDescriptor> {
         if node.graph_uid != self.uid {
             return Err(HetNetError::InvalidReference);

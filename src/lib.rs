@@ -71,6 +71,10 @@ struct PyHeteroDiGraph(HeteroDiGraph);
 
 #[pymethods]
 impl PyHeteroDiGraph {
+    fn __repr__(&self) -> String {
+        format!("Graph<id={}>", self.0.uid())
+    }
+
     fn node_info(&self, node: PyNodeRef) -> PyResult<PyNodeDescriptor> {
         Ok(PyNodeDescriptor(convert_result(self.0.node_info(node.0))?))
     }
