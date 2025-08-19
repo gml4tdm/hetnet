@@ -89,7 +89,8 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
 
     def reset_parameters(self):
         self.embedding.reset_parameters()
-        self.model.reset_parameters()
+        if hasattr(self.model, 'reset_parameters'):
+            self.model.reset_parameters()
 
     def forward(self, batch: typing.Optional[torch.Tensor]) -> torch.Tensor:
         w = self.embedding.weight
