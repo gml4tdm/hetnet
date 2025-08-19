@@ -32,6 +32,7 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
                  q: float = 1.0,
                  num_negative_samples: int = 1,
                  negative_sampling_strategy: typing.Literal['unigram', 'uniform'] = 'uniform',
+                 unigram_walks_per_node: int = 5,
                  sparse: bool = False):
         super().__init__()
         assert walk_length >= context_size
@@ -53,9 +54,11 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
         }
         self.negative_sampling_strategy = negative_sampling_strategy
         if self.negative_sampling_strategy == 'uniform':
+            self.unigram_walks_per_node = None
             self.negative_sampling_weights = torch.tensor(1.0 / self.num_nodes).repeat(self.num_nodes)
         else:
-            self.negative_sampling_weights = torch.zeros(self.num_nodes).pow(3/4)
+            self.unigram_walks_per_node = unigram_walks_per_node
+            self.negative_sampling_weights = self._unigram_probabilities().pow(3/4)
         self.cumulative_negative_sampling_weights = self.negative_sampling_weights.cumsum(dim=0)
         self.embedding = torch.nn.Embedding(
             self.num_nodes, self.embedding_dim, sparse=sparse
@@ -66,6 +69,23 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
     @abc.abstractmethod
     def build(self, input_size: int) -> torch.nn.Module:
         pass
+
+    def _unigram_probabilities(self) -> torch.Tensor:
+        assert self.unigram_walks_per_node is not None
+        all_nodes = [node.uid for node in self.graph.node_list()]
+        hist = torch.zeros(self.num_nodes)
+        for _ in range(self.unigram_walks_per_node):
+            paths = self.graph.random_walks(
+                all_nodes,
+                weighted=self.weighted,
+                path_length=self.walk_length,
+                p=self.p,
+                q=self.q
+            )
+            for path in paths:
+                for node in path:
+                    hist[self.node_to_index_mapping[node]] += 1
+        return hist / (self.num_nodes * self.unigram_walks_per_node)
 
     def reset_parameters(self):
         self.embedding.reset_parameters()

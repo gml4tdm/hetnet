@@ -18,6 +18,7 @@ def node2vec(g: Graph, *,
              q: float = 1.0,
              num_negative_samples: int = 1,
              negative_sampling_strategy: typing.Literal['unigram', 'uniform'] = 'uniform',
+             unigram_walks_per_node: int = 5,
              # Training Settings
              learning_rate: float = 0.01,
              batch_size: int = 32,
@@ -53,6 +54,7 @@ def node2vec(g: Graph, *,
         q=q,
         num_negative_samples=num_negative_samples,
         negative_sampling_strategy=negative_sampling_strategy,
+        unigram_walks_per_node=unigram_walks_per_node,
         sparse=sparse,
     )
     model = model.to(device)
