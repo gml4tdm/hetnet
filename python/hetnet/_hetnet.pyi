@@ -73,6 +73,13 @@ class Graph:
                     p: float = 1.0,
                     q: float = 1.0) -> list[NodeRef]:
         ...
+    def random_walks(self,
+                     starts: list[NodeRef], *,
+                     weighted: bool = True,
+                     path_length: int = 10,
+                     p: float = 1.0,
+                     q: float = 1.0) -> list[list[NodeRef]]:
+        ...
     def random_walk_distribution(self,
                                  start: NodeRef, *,
                                  weighted: bool = True,
@@ -89,17 +96,17 @@ class Graph:
                                       q: float = 1.0,
                                       n_iter: int = 100) -> RandomWalkEvalResult:
        ...
-       
-       
+
+
 class RandomWalkEvalResult:
-    @property 
+    @property
     def exploration_density_at_distance(self) -> list[float]: ...
-    
-    @property 
+
+    @property
     def cumulative_exploration_density_at_distance(self) -> list[float]: ...
-    
-    @property 
+
+    @property
     def max_dist(self) -> float: ...
-    
-    @property 
+
+    @property
     def exploration_density_at_max_dist(self) -> float: ...

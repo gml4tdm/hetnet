@@ -130,6 +130,17 @@ class Graph:
             start, weighted=weighted, path_length=path_length, p=p, q=q
         )
 
+    def random_walks(self,
+                     starts: list[NodeRef], *,
+                     weighted: bool = True,
+                     path_length: int = 10,
+                     p: float = 1.0,
+                     q: float = 1.0) -> list[list[NodeRef]]:
+        return self._graph.random_walks(
+            starts, weighted=weighted, path_length=path_length, p=p, q=q
+        )
+
+
     def random_walk_distribution(self,
                                  start: NodeRef, *,
                                  weighted: bool = True,

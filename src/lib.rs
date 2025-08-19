@@ -157,10 +157,9 @@ impl PyHeteroDiGraph {
         self.random_walk_helper(start, weighted, path_length, self.0.neighbours(), args)
     }
 
-    #[pyo3(signature = (start, n_walks, *, weighted = true, path_length = 10, p = 1.0, q = 1.0))]
+    #[pyo3(signature = (starts, *, weighted = true, path_length = 10, p = 1.0, q = 1.0))]
     fn random_walks(&mut self,
-                    start: PyNodeRef,
-                    n_walks: usize,
+                    starts: Vec<PyNodeRef>,
                     weighted: bool,
                     path_length: usize,
                     p: f64,
@@ -168,9 +167,9 @@ impl PyHeteroDiGraph {
     {
         // We have this as a separate method to avoid the calling overhead between
         // Python and Rust;
-        // This is worth it because this function might be called in a hot loop. 
-        let mut result = Vec::with_capacity(n_walks);
-        for _ in 0..n_walks {
+        // This is worth it because this function might be called in a hot loop.
+        let mut result = Vec::with_capacity(starts.len());
+        for start in starts {
             let args = Node2VecArgs::new(p, q);
             let path = self.random_walk_helper(
                 start, weighted, path_length, self.0.neighbours(), args
