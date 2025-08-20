@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::errors::HetNetError;
 use crate::graph::RawNodeRef;
-use crate::NodeRef;
+use crate::{HeteroDiGraph, NodeRef};
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,8 +22,7 @@ pub trait GraphExplorer {
                   state: &mut Self::State,
                   config: &Self::Config) -> Result<HashMap<RawNodeRef, f64>, HetNetError>;
     
-    fn graph_uid(&self) -> usize;
-    fn is_markov_graph(&self) -> bool;
+    fn graph(&self) -> &HeteroDiGraph;
 }
 
 pub trait NeighbourSelector {
@@ -120,7 +119,7 @@ impl<T: rand::Rng> NeighbourSelector for WeightedNeighbourSelector<T> {
 
 pub struct RandomWalkConfig<T: GraphExplorer> {
     pub(crate) path_length: usize,
-    explorer_args: T::Config
+    pub(crate) explorer_args: T::Config
 }
 
 impl<T: GraphExplorer> Default for RandomWalkConfig<T> {
@@ -157,11 +156,13 @@ impl<G: GraphExplorer, N: NeighbourSelector> RandomWalker<G, N> {
     }
 
     pub fn walk_from(&mut self, start: NodeRef) -> Result<Vec<NodeRef>, HetNetError> {
-        if self.explorer.graph_uid() != start.graph_uid {
+        let g = self.explorer.graph();
+        
+        if g.uid != start.graph_uid {
             return Err(HetNetError::InvalidReference);
         }
         
-        let is_markov = self.explorer.is_markov_graph();
+        let is_markov = g.graph_metadata.is_markov;
         let mut path = vec![start];
         let mut current = start.downgrade();
         let mut state = G::State::default();
@@ -172,7 +173,7 @@ impl<G: GraphExplorer, N: NeighbourSelector> RandomWalker<G, N> {
             )?;
             let histogram = neighbours.into_iter().collect::<Vec<_>>();
             current = self.selector.select(&histogram, is_markov);
-            path.push(current.upgrade(self.explorer.graph_uid()));
+            path.push(current.upgrade(g.uid));
         }
 
         Ok(path)
@@ -182,7 +183,7 @@ impl<G: GraphExplorer, N: NeighbourSelector> RandomWalker<G, N> {
                         start: NodeRef,
                         n_iter: usize) -> Result<HashMap<NodeRef, usize>, HetNetError>
     {
-        if self.explorer.graph_uid() != start.graph_uid {
+        if self.explorer.graph().uid != start.graph_uid {
             return Err(HetNetError::InvalidReference);
         }
         

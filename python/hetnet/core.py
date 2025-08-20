@@ -19,6 +19,8 @@ EdgeRef = _hetnet.EdgeRef
 NodeDescriptor = _hetnet.NodeDescriptor
 EdgeDescriptor = _hetnet.EdgeDescriptor
 
+FastWalker = _hetnet.FastWalker
+
 RandomWalkEvalResult = _hetnet.RandomWalkEvalResult
 
 
@@ -165,6 +167,12 @@ class Graph:
         return self._graph.evaluate_random_walk_settings(
             on_nodes=on_nodes, weighted=weighted, path_length=path_length, p=p, q=q, n_iter=n_iter
         )
+
+    def estimate_fast_walker_size(self) -> int:
+        return self._graph.estimate_fast_walker_size()
+
+    def fast_walker(self, p: float = 1.0, q: float = 1.0) -> FastWalker:
+        return self._graph.fast_walker(p, q)
 
     def to_dot_graph(self, *,
                      aggregated_edges: bool = False):

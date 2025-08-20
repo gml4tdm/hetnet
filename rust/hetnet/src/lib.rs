@@ -32,6 +32,10 @@ pub mod walkers {
         NeighbourSelector,
         RandomWalker
     };
+    
+    pub mod opt {
+        pub use crate::algorithms::fast_walker::CachedNode2VecWalker;
+    }
 
     pub mod tuning {
         pub mod eval {

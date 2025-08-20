@@ -21,10 +21,13 @@ use hetnet::{
        GraphExplorer,
        NeighbourSelector,
        RandomWalker,
+       opt::CachedNode2VecWalker
     },
     deduplication as dedup
 };
+
 use hetnet::walkers::tuning::eval::evaluate_random_walk_config;
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Error Handling
@@ -209,6 +212,20 @@ impl PyHeteroDiGraph {
             on_nodes, weighted, path_length, self.0.neighbours(), args, n_iter
         )
     }
+
+    fn estimate_fast_walker_size(&self) -> usize {
+        CachedNode2VecWalker::estimate_required_memory(&self.0)
+    }
+
+    #[pyo3(signature = (p = 1.0, q = 1.0))]
+    fn fast_walker(&self, p: f64, q: f64) -> PyResult<PyFastWalker> {
+        let result = CachedNode2VecWalker::new(
+            self.0.neighbours(),
+            Node2VecArgs::new(p, q)
+        );
+        let inner = convert_result(result)?;
+        Ok(PyFastWalker(inner))
+    }
 }
 
 impl PyHeteroDiGraph {
@@ -342,6 +359,32 @@ impl PyHeteroDiGraph {
             eval_args
         );
         Ok(PyRandomWalkEvalResult(convert_result(eval_result)?))
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// Fast Walker
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[pyclass(name = "FastWalker")]
+struct PyFastWalker(CachedNode2VecWalker);
+
+#[pymethods]
+impl PyFastWalker {
+    fn walk(&self, node: PyNodeRef, path_length: usize) -> PyResult<Vec<PyNodeRef>>{
+        let result = self.0.walk_from(node.0, path_length);
+        let path = convert_result(result)?;
+        let py_path = path.into_iter().map(PyNodeRef).collect();
+        Ok(py_path)
+    }
+
+    fn walks(&self, starts: Vec<PyNodeRef>, path_length: usize) -> PyResult<Vec<Vec<PyNodeRef>>> {
+        let mut matrix = Vec::with_capacity(starts.len());
+        for start in starts {
+            matrix.push(self.walk(start, path_length)?);
+        }
+        Ok(matrix)
     }
 }
 
@@ -526,5 +569,6 @@ fn _hetnet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyNodeRef>()?;
     m.add_class::<PyEdgeRef>()?;
     m.add_class::<PyRandomWalkEvalResult>()?;
+    m.add_class::<PyFastWalker>()?;
     Ok(())
 }

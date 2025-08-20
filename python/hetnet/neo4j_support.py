@@ -9,10 +9,11 @@ from .core import Graph, GraphBuilder
 
 def load_json(filename: pathlib.Path | str, *,
               directed: bool = True,
-              index=None) -> Graph:
+              index=None,
+              encoding='utf8') -> Graph:
     builder = GraphBuilder()
     nodes = {}
-    with open(filename) as f:
+    with open(filename, encoding=encoding) as f:
         for record in map(json.loads, f):
             if record['type'] == 'node':
                 if len(record['labels']) != 1:

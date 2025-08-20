@@ -73,6 +73,7 @@ impl Display for NodeRef {
 }
 
 impl NodeRef {
+    #[inline]
     pub(crate) fn downgrade(&self) -> RawNodeRef {
         RawNodeRef(self.node_uid)
     }
@@ -94,6 +95,7 @@ impl Display for EdgeRef {
 pub struct RawNodeRef(pub(crate) usize);
 
 impl RawNodeRef {
+    #[inline]
     pub(crate) fn upgrade(&self, graph_uid: usize) -> NodeRef {
         NodeRef { graph_uid, node_uid: self.0 }
     }

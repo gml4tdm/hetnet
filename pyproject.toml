@@ -16,10 +16,16 @@ dependencies = [
     "graphviz",
     "torch",
     "torch_geometric",
-    "torch_cluster"
+    "torch_cluster",
+    "matplotlib",
+    "networkx"
 ]
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
 python-source = "python"
 module-name = "hetnet._hetnet"
+
+
+[tool.uv.extra-build-dependencies]
+torch-cluster = ["torch"]

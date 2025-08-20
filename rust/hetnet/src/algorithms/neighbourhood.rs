@@ -66,16 +66,8 @@ impl HeteroDiGraph {
 
 
 impl<'a> super::walkers::GraphExplorer for Neighbours<'a> {
-    type State = Option<RawNodeRef>;
     type Config = Node2VecArgs;
-
-    fn graph_uid(&self) -> usize {
-        self.graph.uid
-    }
-
-    fn is_markov_graph(&self) -> bool {
-        self.graph.graph_metadata.is_markov
-    }
+    type State = Option<RawNodeRef>;
 
     fn neighbours(
         &self,
@@ -115,5 +107,9 @@ impl<'a> super::walkers::GraphExplorer for Neighbours<'a> {
             }
         }
         Ok(result)
+    }
+
+    fn graph(&self) -> &HeteroDiGraph {
+        self.graph
     }
 }
