@@ -40,12 +40,6 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
         assert walk_length >= context_size
         self.weighted = weighted
         self.graph = graph
-        if self.weighted and not self.fast_walker:
-            warnings.warn(
-                'Using weighted graphs without a fast walker.'
-                'Consider converting the graph to a Markov graph '
-                '(.to_markov()) for better performance.'
-            )
         self.embedding_dim = embedding_dim
         self.walk_length = walk_length
         self.context_size = context_size
@@ -60,6 +54,12 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
             self.walker = self.graph.fast_walker(p=self.p, q=self.q)
         if self.fast_walker and not self.weighted:
             raise ValueError('fast_walker can only be used if weighted is True')
+        if self.weighted and not self.fast_walker:
+            warnings.warn(
+                'Using weighted graphs without a fast walker.'
+                'Consider converting the graph to a Markov graph '
+                '(.to_markov()) for better performance.'
+            )
         self.node_to_index_mapping = {
             node.uid: i for i, node in enumerate(self.graph.node_list())
         }
