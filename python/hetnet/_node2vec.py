@@ -1,5 +1,6 @@
 import abc
 import typing
+import warnings
 
 import torch
 
@@ -38,10 +39,13 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
         super().__init__()
         assert walk_length >= context_size
         self.weighted = weighted
-        if self.weighted:
-            self.graph = graph.to_markov_graph()    # Optimised weight computation
-        else:
-            self.graph = graph
+        self.graph = graph
+        if self.weighted and not self.fast_walker:
+            warnings.warn(
+                'Using weighted graphs without a fast walker.'
+                'Consider converting the graph to a Markov graph '
+                '(.to_markov()) for better performance.'
+            )
         self.embedding_dim = embedding_dim
         self.walk_length = walk_length
         self.context_size = context_size
@@ -61,7 +65,7 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
         }
         self.index_to_node_mapping: list[NodeRef] = [None] * self.num_nodes     # type: ignore
         for node, idx in self.node_to_index_mapping.items():
-            self.index_to_node_mapping[idx] = node     
+            self.index_to_node_mapping[idx] = node
         self.negative_sampling_strategy = negative_sampling_strategy
         if self.negative_sampling_strategy == 'uniform':
             self.unigram_walks_per_node = None
@@ -112,7 +116,7 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
 
     def loader(self, **kwargs):
         return torch.utils.data.DataLoader(
-            range(self.num_nodes), collate_fn=self._sample, **kwargs
+            range(self.num_nodes), collate_fn=self._sample, **kwargs    # type: ignore
         )
 
     def _sample(self, batch: list[int] | torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
