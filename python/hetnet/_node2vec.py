@@ -3,7 +3,7 @@ import typing
 
 import torch
 
-from .core import Graph
+from .core import Graph, NodeRef
 
 
 class AbstractNode2Vec(abc.ABC, torch.nn.Module):
@@ -33,7 +33,8 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
                  num_negative_samples: int = 1,
                  negative_sampling_strategy: typing.Literal['unigram', 'uniform'] = 'uniform',
                  unigram_walks_per_node: int = 5,
-                 sparse: bool = False):
+                 sparse: bool = False,
+                 fast_walker: bool = False):
         super().__init__()
         assert walk_length >= context_size
         self.weighted = weighted
@@ -49,12 +50,18 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
         self.q = q
         self.num_negative_samples = num_negative_samples
         self.num_nodes = len(self.graph.node_list())
+        self.fast_walker = fast_walker
+        self.walker = None
+        if self.fast_walker:
+            self.walker = self.graph.fast_walker(p=self.p, q=self.q)
+        if self.fast_walker and not self.weighted:
+            raise ValueError('fast_walker can only be used if weighted is True')
         self.node_to_index_mapping = {
             node.uid: i for i, node in enumerate(self.graph.node_list())
         }
-        self.index_to_node_mapping = [None] * self.num_nodes
+        self.index_to_node_mapping: list[NodeRef] = [None] * self.num_nodes     # type: ignore
         for node, idx in self.node_to_index_mapping.items():
-            self.index_to_node_mapping[idx] = node      # type: ignore
+            self.index_to_node_mapping[idx] = node     
         self.negative_sampling_strategy = negative_sampling_strategy
         if self.negative_sampling_strategy == 'uniform':
             self.unigram_walks_per_node = None
@@ -78,13 +85,16 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
         all_nodes = [node.uid for node in self.graph.node_list()]
         hist = torch.zeros(self.num_nodes)
         for _ in range(self.unigram_walks_per_node):
-            paths = self.graph.random_walks(
-                all_nodes,
-                weighted=self.weighted,
-                path_length=self.walk_length,
-                p=self.p,
-                q=self.q
-            )
+            if self.walker is None:
+                paths = self.graph.random_walks(
+                    all_nodes,
+                    weighted=self.weighted,
+                    path_length=self.walk_length,
+                    p=self.p,
+                    q=self.q
+                )
+            else:
+                paths = self.walker.walks(all_nodes, self.walk_length)
             for path in paths:
                 for node in path:
                     hist[self.node_to_index_mapping[node]] += 1
@@ -112,13 +122,17 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
 
     def _sample_positives(self, batch: torch.Tensor):
         batch = batch.repeat(self.walks_per_node)
-        rw = self.graph.random_walks(
-            [self.index_to_node_mapping[idx] for idx in batch.tolist()],
-            weighted=self.weighted,
-            path_length=self.walk_length,
-            p=self.p,
-            q=self.q
-        )
+        starts = [self.index_to_node_mapping[idx] for idx in batch.tolist()]
+        if self.walker is None:
+            rw = self.graph.random_walks(
+                starts,
+                weighted=self.weighted,
+                path_length=self.walk_length,
+                p=self.p,
+                q=self.q
+            )
+        else:
+            rw = self.walker.walks(starts, self.walk_length)
         rw = torch.tensor([
             [self.node_to_index_mapping[node] for node in walk]
             for walk in rw

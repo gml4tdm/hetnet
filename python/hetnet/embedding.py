@@ -25,7 +25,8 @@ def node2vec(g: Graph, *,
              sparse: bool = False,
              epochs: int = 5,
              num_workers: int = 1,
-             device_hint: str | None = None) -> tuple[torch.Tensor, dict[NodeRef, int]]:
+             device_hint: str | None = None,
+             fast_walker: bool = False) -> tuple[torch.Tensor, dict[NodeRef, int]]:
     if device_hint is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     else:
@@ -56,6 +57,7 @@ def node2vec(g: Graph, *,
         negative_sampling_strategy=negative_sampling_strategy,
         unigram_walks_per_node=unigram_walks_per_node,
         sparse=sparse,
+        fast_walker=fast_walker,
     )
     model = model.to(device)
 
