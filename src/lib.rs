@@ -3,6 +3,7 @@
 // Imports and modules
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
+use rayon::iter::ParallelIterator;
 use std::collections::{HashMap, HashSet};
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
@@ -27,7 +28,7 @@ use hetnet::{
 };
 
 use hetnet::walkers::tuning::eval::evaluate_random_walk_config;
-
+use rayon::prelude::IntoParallelIterator;
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Error Handling
@@ -217,14 +218,14 @@ impl PyHeteroDiGraph {
         CachedNode2VecWalker::estimate_required_memory(&self.0)
     }
 
-    #[pyo3(signature = (p = 1.0, q = 1.0))]
-    fn fast_walker(&self, p: f64, q: f64) -> PyResult<PyFastWalker> {
+    #[pyo3(signature = (p = 1.0, q = 1.0, *, n_workers = 1))]
+    fn fast_walker(&self, p: f64, q: f64, n_workers: usize) -> PyResult<PyFastWalker> {
         let result = CachedNode2VecWalker::new(
             self.0.neighbours(),
             Node2VecArgs::new(p, q)
         );
         let inner = convert_result(result)?;
-        Ok(PyFastWalker(inner))
+        PyFastWalker::new(inner, n_workers)
     }
 }
 
@@ -368,23 +369,45 @@ impl PyHeteroDiGraph {
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[pyclass(name = "FastWalker")]
-struct PyFastWalker(CachedNode2VecWalker);
+struct PyFastWalker {
+    inner: CachedNode2VecWalker,
+    n_workers: usize,
+    pool: rayon::ThreadPool
+}
+
+impl PyFastWalker {
+    fn new(inner: CachedNode2VecWalker, n_workers: usize) -> PyResult<Self> {
+        let result = rayon::ThreadPoolBuilder::new()
+            .num_threads(n_workers)
+            .build();
+        let pool = convert_result(result)?;
+        Ok(Self { inner, n_workers, pool })
+    }
+}
 
 #[pymethods]
 impl PyFastWalker {
     fn walk(&self, node: PyNodeRef, path_length: usize) -> PyResult<Vec<PyNodeRef>>{
-        let result = self.0.walk_from(node.0, path_length);
+        let result = self.inner.walk_from(node.0, path_length);
         let path = convert_result(result)?;
         let py_path = path.into_iter().map(PyNodeRef).collect();
         Ok(py_path)
     }
 
     fn walks(&self, starts: Vec<PyNodeRef>, path_length: usize) -> PyResult<Vec<Vec<PyNodeRef>>> {
-        let mut matrix = Vec::with_capacity(starts.len());
-        for start in starts {
-            matrix.push(self.walk(start, path_length)?);
+        if self.n_workers == 1 {
+            let mut matrix = Vec::with_capacity(starts.len());
+            for start in starts {
+                matrix.push(self.walk(start, path_length)?);
+            }
+            Ok(matrix)
+        } else {
+            self.pool.install(|| {
+                starts.into_par_iter()
+                    .map(|start| self.walk(start, path_length))
+                    .collect::<Result<Vec<_>, _>>()
+            })
         }
-        Ok(matrix)
     }
 }
 

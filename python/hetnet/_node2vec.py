@@ -35,7 +35,8 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
                  negative_sampling_strategy: typing.Literal['unigram', 'uniform'] = 'uniform',
                  unigram_walks_per_node: int = 5,
                  sparse: bool = False,
-                 fast_walker: bool = False):
+                 fast_walker: bool = False,
+                 n_workers: int = 1):
         super().__init__()
         assert walk_length >= context_size
         self.weighted = weighted
@@ -49,6 +50,7 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
         self.num_negative_samples = num_negative_samples
         self.num_nodes = len(self.graph.node_list())
         self.fast_walker = fast_walker
+        self.n_workers = n_workers
         self.walker = None
         if self.fast_walker:
             self.walker = self.graph.fast_walker(p=self.p, q=self.q)
@@ -56,9 +58,14 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
             raise ValueError('fast_walker can only be used if weighted is True')
         if self.weighted and not self.fast_walker:
             warnings.warn(
-                'Using weighted graphs without a fast walker.'
+                'Using weighted graphs without a fast walker. '
                 'Consider converting the graph to a Markov graph '
                 '(.to_markov()) for better performance.'
+            )
+        if self.n_workers > 1 and not self.fast_walker:
+            warnings.warn(
+                'n_workers > 1 is ignored when not using '
+                'the fast walker.'
             )
         self.node_to_index_mapping = {
             node.uid: i for i, node in enumerate(self.graph.node_list())

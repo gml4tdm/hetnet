@@ -13,3 +13,4 @@ error_set = "0.8.5"
 pyo3 = "0.25.1"
 rand = "0.9.1"
 hetnet = { path = "./rust/hetnet" }
+rayon = "1.11.0"
