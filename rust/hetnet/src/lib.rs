@@ -4,6 +4,7 @@ mod builder;
 mod meta_path;
 mod descriptors;
 mod algorithms;
+mod utils;
 
 // Public exports
 pub use graph::{

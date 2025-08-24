@@ -168,9 +168,6 @@ class Graph:
             on_nodes=on_nodes, weighted=weighted, path_length=path_length, p=p, q=q, n_iter=n_iter
         )
 
-    def estimate_fast_walker_size(self) -> int:
-        return self._graph.estimate_fast_walker_size()
-
     def fast_walker(self, p: float = 1.0, q: float = 1.0) -> FastWalker:
         return self._graph.fast_walker(p, q)
 
