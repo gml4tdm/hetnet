@@ -3,8 +3,9 @@
 // Imports and modules
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-use rayon::iter::ParallelIterator;
 use std::collections::{HashMap, HashSet};
+
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 
@@ -22,13 +23,12 @@ use hetnet::{
        GraphExplorer,
        NeighbourSelector,
        RandomWalker,
-       opt::CachedNode2VecWalker
+       opt::CachedNode2VecWalker,
+       tuning::eval::evaluate_random_walk_config,
     },
     deduplication as dedup
 };
 
-use hetnet::walkers::tuning::eval::evaluate_random_walk_config;
-use rayon::prelude::IntoParallelIterator;
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Error Handling
@@ -212,6 +212,10 @@ impl PyHeteroDiGraph {
         self.random_walk_eval_helper(
             on_nodes, weighted, path_length, self.0.neighbours(), args, n_iter
         )
+    }
+
+    fn estimate_fast_walker_size(&self) -> usize {
+        CachedNode2VecWalker::estimate_size(&self.0)
     }
 
     #[pyo3(signature = (p = 1.0, q = 1.0, *, n_workers = 1))]

@@ -5,8 +5,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use rand::Rng;
-
 use crate::graph::RawNodeRef;
 use crate::{HetNetError, HetNetResult, NodeRef};
 use crate::utils::rng::AliasSampler;
@@ -17,7 +15,6 @@ use crate::walkers::{GraphExplorer, Neighbours, Node2VecArgs};
 // Cached Random Walker
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-type EdgeTable = (Vec<f64>, Vec<usize>);
 
 pub struct CachedNode2VecWalker {
     graph_uid: usize,
@@ -26,20 +23,36 @@ pub struct CachedNode2VecWalker {
 }
 
 impl CachedNode2VecWalker {
+    pub fn estimate_size(g: &crate::graph::HeteroDiGraph) -> usize {
+        let incoming = Self::collect_incoming_nodes(g);
+
+        let mut size = 0;
+        size += size_of::<usize>();  // graph_uid
+        for node in g.nodes.iter() {
+            let n_out = node.connections.len();
+            let n_in = incoming[node.uid].len();
+            let mut sampler_size = 0;
+            sampler_size += size_of::<f64>();
+            sampler_size += size_of::<rand::distr::Uniform<f64>>();
+            sampler_size += size_of::<Vec<(f64, (usize, usize))>>();
+            sampler_size += size_of::<Vec<(usize, usize)>>();
+            sampler_size += n_out * size_of::<(f64, (usize, usize))>();
+            sampler_size += n_out * size_of::<(usize, usize)>();
+            size += (n_in + 1) * sampler_size;
+        }
+
+        size
+    }
+
     pub fn new<G>(explorer: G, config: Node2VecArgs) -> HetNetResult<Self>
     where
         G: GraphExplorer<Config=Node2VecArgs>
     {
-        // Collect incoming nodes 
+        // Collect incoming nodes
         let g = explorer.graph();
-        let mut incoming = vec![BTreeSet::new(); g.nodes.len()];
-        for node in g.nodes.iter() {
-            for edge in node.connections.iter() {
-                incoming[edge.to.0].insert(node.uid);
-            }
-        }
+        let incoming = Self::collect_incoming_nodes(&g);
 
-        // Prepare index table 
+        // Prepare index table
         let mut global_index_map = vec![0; g.nodes.len()];
         let mut local_index_map = vec![BTreeMap::new(); g.nodes.len()];
         let mut offset = 0;
@@ -66,13 +79,23 @@ impl CachedNode2VecWalker {
         for v in 0..g.nodes.len() {
             for u in incoming[v].iter().copied() {
                 let dist = Self::build_dist(
-                    v, &config, &neighbours, Some(RawNodeRef(u)), &global_index_map, &local_index_map  
+                    v, &config, &neighbours, Some(RawNodeRef(u)), &global_index_map, &local_index_map
                 )?;
                 transition_matrix.push(dist);
             }
         }
 
         Ok(Self { graph_uid: g.uid, base_matrix, transition_matrix })
+    }
+
+    fn collect_incoming_nodes(g: &crate::graph::HeteroDiGraph) -> Vec<BTreeSet<usize>> {
+        let mut incoming = vec![BTreeSet::new(); g.nodes.len()];
+        for node in g.nodes.iter() {
+            for edge in node.connections.iter() {
+                incoming[edge.to.0].insert(node.uid);
+            }
+        }
+        incoming
     }
 
     #[inline]

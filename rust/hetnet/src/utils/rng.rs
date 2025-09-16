@@ -14,7 +14,7 @@ use rand::Rng;
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub struct AliasSampler<T> {
-    n: f64,
+    _n: f64,
     probability_table: Vec<(f64, T)>,
     alias_table: Vec<T>,
     uniform: Uniform<f64>
@@ -49,7 +49,7 @@ impl<T: Copy> AliasSampler<T> {
             }
         }
 
-        Self { n, probability_table, alias_table, uniform: Uniform::new(0.0, n).unwrap() }
+        Self { _n: n, probability_table, alias_table, uniform: Uniform::new(0.0, n).unwrap() }
     }
 
 
@@ -148,4 +148,3 @@ impl Ord for CmpFloat {
         self.partial_cmp(other).unwrap()
     }
 }
-
