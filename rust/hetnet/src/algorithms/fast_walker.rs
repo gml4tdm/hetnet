@@ -24,6 +24,15 @@ pub struct CachedNode2VecWalker {
 
 impl CachedNode2VecWalker {
     pub fn estimate_size(g: &crate::graph::HeteroDiGraph) -> usize {
+        Self::estimate_size_helper(g, 0)
+    }
+
+    pub fn estimate_size_as_undirected(g: &crate::graph::HeteroDiGraph) -> usize {
+        Self::estimate_size_helper(g, 1)
+    }
+
+    #[inline]
+    fn estimate_size_helper(g: &crate::graph::HeteroDiGraph, bi_multiplier: usize) -> usize {
         let incoming = Self::collect_incoming_nodes(g);
 
         let mut size = 0;
@@ -36,9 +45,9 @@ impl CachedNode2VecWalker {
             sampler_size += size_of::<rand::distr::Uniform<f64>>();
             sampler_size += size_of::<Vec<(f64, (usize, usize))>>();
             sampler_size += size_of::<Vec<(usize, usize)>>();
-            sampler_size += n_out * size_of::<(f64, (usize, usize))>();
-            sampler_size += n_out * size_of::<(usize, usize)>();
-            size += (n_in + 1) * sampler_size;
+            sampler_size += (n_out + bi_multiplier*n_in) * size_of::<(f64, (usize, usize))>();
+            sampler_size += (n_out + bi_multiplier*n_in) * size_of::<(usize, usize)>();
+            size += (n_in + 1 + bi_multiplier*n_out) * sampler_size;
         }
 
         size

@@ -171,6 +171,9 @@ class Graph:
     def estimate_fast_walker_size(self) -> int:
         return self._graph.estimate_fast_walker_size()
 
+    def estimate_fast_walker_size_as_undirected(self) -> int:
+        return self._graph.estimate_fast_walker_size_as_undirected()
+
     def fast_walker(self, p: float = 1.0, q: float = 1.0) -> FastWalker:
         return self._graph.fast_walker(p, q)
 

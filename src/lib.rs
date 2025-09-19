@@ -218,6 +218,10 @@ impl PyHeteroDiGraph {
         CachedNode2VecWalker::estimate_size(&self.0)
     }
 
+    fn estimate_fast_walker_size_as_undirected(&self) -> usize {
+        CachedNode2VecWalker::estimate_size_as_undirected(&self.0)
+    }
+
     #[pyo3(signature = (p = 1.0, q = 1.0, *, n_workers = 1))]
     fn fast_walker(&self, p: f64, q: f64, n_workers: usize) -> PyResult<PyFastWalker> {
         let result = CachedNode2VecWalker::new(
