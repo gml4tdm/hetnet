@@ -53,7 +53,9 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
         self.n_workers = n_workers
         self.walker = None
         if self.fast_walker:
-            self.walker = self.graph.fast_walker(p=self.p, q=self.q)
+            self.walker = self.graph.fast_walker(
+                p=self.p, q=self.q, n_workers=self.n_workers
+            )
         if self.fast_walker and not self.weighted:
             raise ValueError('fast_walker can only be used if weighted is True')
         if self.weighted and not self.fast_walker:

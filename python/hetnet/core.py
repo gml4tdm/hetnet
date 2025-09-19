@@ -174,8 +174,8 @@ class Graph:
     def estimate_fast_walker_size_as_undirected(self) -> int:
         return self._graph.estimate_fast_walker_size_as_undirected()
 
-    def fast_walker(self, p: float = 1.0, q: float = 1.0) -> FastWalker:
-        return self._graph.fast_walker(p, q)
+    def fast_walker(self, p: float = 1.0, q: float = 1.0, *, n_workers: int = 1) -> FastWalker:
+        return self._graph.fast_walker(p, q, n_workers=n_workers)
 
     def to_dot_graph(self, *,
                      aggregated_edges: bool = False):
