@@ -142,7 +142,8 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
                 weighted=self.weighted,
                 path_length=self.walk_length,
                 p=self.p,
-                q=self.q
+                q=self.q,
+                n_workers=self.n_workers
             )
         else:
             rw = self.walker.walks(starts, self.walk_length)

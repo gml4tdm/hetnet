@@ -78,7 +78,8 @@ class Graph:
                      weighted: bool = True,
                      path_length: int = 10,
                      p: float = 1.0,
-                     q: float = 1.0) -> list[list[NodeRef]]:
+                     q: float = 1.0,
+                     n_workers: int = 1) -> list[list[NodeRef]]:
         ...
     def random_walk_distribution(self,
                                  start: NodeRef, *,

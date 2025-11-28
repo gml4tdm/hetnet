@@ -4,10 +4,12 @@ import torch
 #import torch_geometric.nn
 
 from .core import Graph, NodeRef
-from . import _node2vec
+from ._node2vec import AbstractNode2Vec, Node2Vec as DefaultNode2Vec
+
 
 
 def node2vec(g: Graph, *,
+             node2vec_model: type[AbstractNode2Vec] = DefaultNode2Vec,
              # Random Walk & Sample Generation Settings
              weighted: bool = True,
              embedding_size: int = 128,
@@ -24,10 +26,10 @@ def node2vec(g: Graph, *,
              batch_size: int = 32,
              sparse: bool = False,
              epochs: int = 5,
+             num_threads: int = 1,
              num_workers: int = 1,
              device_hint: str | None = None,
-             fast_walker: bool = False,
-             n_workers: int = 1) -> tuple[torch.Tensor, dict[NodeRef, int]]:
+             fast_walker: bool = False) -> tuple[torch.Tensor, dict[NodeRef, int]]:
     if device_hint is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     else:
@@ -45,7 +47,7 @@ def node2vec(g: Graph, *,
     #     num_negative_samples=num_negative_samples,
     #     sparse=sparse,
     # )
-    model = _node2vec.Node2Vec(
+    model = node2vec_model(
         g,
         weighted=weighted,
         embedding_dim=embedding_size,
@@ -59,7 +61,7 @@ def node2vec(g: Graph, *,
         unigram_walks_per_node=unigram_walks_per_node,
         sparse=sparse,
         fast_walker=fast_walker,
-        n_workers=n_workers
+        n_workers=num_threads
     )
     model = model.to(device)
 

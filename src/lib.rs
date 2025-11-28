@@ -165,25 +165,44 @@ impl PyHeteroDiGraph {
         self.random_walk_helper(start, weighted, path_length, self.0.neighbours(), args)
     }
 
-    #[pyo3(signature = (starts, *, weighted = true, path_length = 10, p = 1.0, q = 1.0))]
+    #[pyo3(signature = (starts, *, weighted = true, path_length = 10, p = 1.0, q = 1.0, n_workers = 1))]
     fn random_walks(&mut self,
                     starts: Vec<PyNodeRef>,
                     weighted: bool,
                     path_length: usize,
                     p: f64,
-                    q: f64) -> PyResult<Vec<Vec<PyNodeRef>>>
+                    q: f64,
+                    n_workers: usize) -> PyResult<Vec<Vec<PyNodeRef>>>
     {
-        // We have this as a separate method to avoid the calling overhead between
-        // Python and Rust;
-        // This is worth it because this function might be called in a hot loop.
-        let mut result = Vec::with_capacity(starts.len());
-        for start in starts {
-            let args = Node2VecArgs::new(p, q);
-            let path = self.random_walk_helper(
-                start, weighted, path_length, self.0.neighbours(), args
-            )?;
-            result.push(path);
-        }
+        let result = if n_workers == 1 {
+            // We have this as a separate method to avoid the calling overhead between
+            // Python and Rust;
+            // This is worth it because this function might be called in a hot loop.
+            let mut result = Vec::with_capacity(starts.len());
+            for start in starts {
+                let args = Node2VecArgs::new(p, q);
+                let path = self.random_walk_helper(
+                    start, weighted, path_length, self.0.neighbours(), args
+                )?;
+                result.push(path);
+            }
+            result
+        } else {
+            let pool_res = rayon::ThreadPoolBuilder::new()
+                .num_threads(n_workers)
+                .build();
+            let pool = convert_result(pool_res)?;
+            pool.install(|| {
+                starts.into_par_iter()
+                    .map(|start| {
+                        let args = Node2VecArgs::new(p, q);
+                        self.random_walk_helper(
+                            start, weighted, path_length, self.0.neighbours(), args
+                        )
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+            })?
+        };
         Ok(result)
     }
 
