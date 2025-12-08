@@ -29,7 +29,7 @@ def node2vec(g: Graph, *,
              num_threads: int = 1,
              num_workers: int = 1,
              device_hint: str | None = None,
-             fast_walker: bool = False) -> tuple[torch.Tensor, dict[NodeRef, int]]:
+             fast_walker: bool = False) -> tuple[torch.Tensor, dict[NodeRef, int], list[float]]:
     if device_hint is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     else:
@@ -72,6 +72,8 @@ def node2vec(g: Graph, *,
     else:
         optimiser = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
+    norm = len(loader) * (1 + model.num_negative_samples)
+    losses = []
     for epoch in range(epochs):
         total_loss = 0
         for pos_rw, neg_rw in loader:
@@ -80,10 +82,11 @@ def node2vec(g: Graph, *,
             loss.backward()
             optimiser.step()
             total_loss += loss.item()
-        print(f'Epoch {epoch}: {total_loss / len(loader):.4f}')
+        losses.append(total_loss / norm)
+        print(f'Epoch {epoch}: {total_loss / norm:.4f}')
 
     embeddings = model.embedding.weight.detach().cpu()
-    return embeddings, model.node_to_index_mapping
+    return embeddings, model.node_to_index_mapping, losses
 
 
 # def _to_torch_info(g: Graph):
