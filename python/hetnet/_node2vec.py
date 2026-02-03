@@ -119,10 +119,9 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
         if hasattr(self.model, 'reset_parameters'):
             self.model.reset_parameters()
 
-    def forward(self, batch: typing.Optional[torch.Tensor]) -> torch.Tensor:
-        w = self.embedding.weight
-        x = w if batch is None else w[batch]
-        return self.model(x)
+    def forward(self, batch: typing.Optional[torch.Tensor], *args) -> torch.Tensor:
+        x = self.embedding(batch)
+        return self.model(x, *args)
 
     def loader(self, **kwargs):
         return torch.utils.data.DataLoader(
@@ -178,13 +177,13 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
             all_walks.append(samples[:, i:i + self.context_size])
         return torch.cat(all_walks, dim=0)
 
-    def loss(self, pos, neg):
-        return self._loss(pos, 0, 1) + self._loss(neg, 1, -1)
+    def loss(self, pos, neg, *args):
+        return self._loss(pos, 0, 1, *args) + self._loss(neg, 1, -1, *args)
 
-    def _loss(self, x, alpha, beta):
+    def _loss(self, x, alpha, beta, *args):
         start, rest = x[:, 0], x[:, 1:].contiguous()
-        h_start = self.embedding(start).view(x.size(0), -1, self.embedding_dim)
-        h_rest = self.embedding(rest.view(-1)).view(x.size(0), -1, self.embedding_dim)
+        h_start = self.forward(start, *args).view(x.size(0), -1, self.embedding_dim)
+        h_rest = self.forward(rest.view(-1), *args).view(x.size(0), -1, self.embedding_dim)
         out = (h_start * h_rest).sum(dim=-1).view(-1)
         return -torch.log(alpha + beta*torch.sigmoid(out) + self.EPS).mean()
 

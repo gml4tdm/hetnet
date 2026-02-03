@@ -97,9 +97,9 @@ def node2vec(g: Graph, *,
     losses = []
     for epoch in range(epochs):
         total_loss = 0
-        for pos_rw, neg_rw in loader:
+        for pos_rw, neg_rw, *args in loader:
             optimiser.zero_grad()
-            loss = model.loss(pos_rw.to(device), neg_rw.to(device))
+            loss = model.loss(pos_rw.to(device), neg_rw.to(device), *args)
             loss.backward()
             optimiser.step()
             total_loss += loss.item()
