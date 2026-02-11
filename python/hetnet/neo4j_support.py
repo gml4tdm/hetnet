@@ -16,6 +16,34 @@ def _json_loader(x):
         raise ValueError(f'Failed to parse JSON: {x}') from e
 
 
+def write_pseudo_json(g: Graph,
+               filename: pathlib.Path, *,
+               encoding='utf8'):
+    with open(filename, 'w', encoding=encoding) as file:
+        for node in g.node_list():
+            record = {
+                'type': 'node',
+                'labels': [node.type],
+                'properties': g.node_properties(node),
+                'id': repr(node.uid)
+            }
+            file.write(json.dumps(record) + '\n')
+        for edge in g.edge_list():
+            record = {
+                'type': 'relationship',
+                'start': {
+                    'id': repr(edge.source.uid)
+                },
+                'end': {
+                    'id': repr(edge.destination.uid)
+                },
+                'label': edge.type,
+                'properties': g.edge_properties(edge),
+                'id': repr(edge.uid)
+            }
+            file.write(json.dumps(record) + '\n')
+
+
 def load_json(filename: pathlib.Path | str, *,
               directed: bool = True,
               index=None,

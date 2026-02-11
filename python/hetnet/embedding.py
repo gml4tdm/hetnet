@@ -1,7 +1,6 @@
 import typing
 
 import torch
-#import torch_geometric.nn
 
 from .core import Graph, NodeRef
 from ._node2vec import AbstractNode2Vec, Node2Vec as DefaultNode2Vec
@@ -17,6 +16,7 @@ class _ReporterWrapper:
         if self.last_message != message:
             self.reporter(progress, message)
             self.last_message = message
+
 
 
 def node2vec(g: Graph, *,
@@ -41,26 +41,15 @@ def node2vec(g: Graph, *,
              num_threads: int = 1,
              num_workers: int = 1,
              device_hint: str | None = None,
-             fast_walker: bool = False) -> tuple[torch.Tensor, dict[NodeRef, int], list[float]]:
-    progress_reporter = _ReporterWrapper(progress_reporter)
-
+             fast_walker: bool = False,
+             n_workers: int = 1,
+             node2vec_model: type[_node2vec.Node2Vec],
+             **kwargs) -> tuple[torch.Tensor, dict[NodeRef, int], list[float]]:
     if device_hint is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     else:
         device = torch.device(device_hint)
 
-    #mapping, edge_index = _to_torch_info(g)
-    # model = torch_geometric.nn.Node2Vec(
-    #     edge_index,
-    #     embedding_dim=embedding_size,
-    #     walk_length=walk_length,
-    #     context_size=context_size,
-    #     walks_per_node=walks_per_node,
-    #     p=p,
-    #     q=q,
-    #     num_negative_samples=num_negative_samples,
-    #     sparse=sparse,
-    # )
     progress_reporter(0, 'Initialising model')
     model = node2vec_model(
         g,
@@ -109,24 +98,8 @@ def node2vec(g: Graph, *,
                 f'Epoch {epoch} {(n_steps % n_steps_per_epoch) * 100 // n_steps_per_epoch:.2f}% done'
             )
         losses.append(total_loss / norm)
-        #print(f'Epoch {epoch}: {total_loss / norm:.4f}')
 
     progress_reporter(100, 'Done')
 
     embeddings = model.embedding.weight.detach().cpu()
     return embeddings, model.node_to_index_mapping, losses
-
-
-# def _to_torch_info(g: Graph):
-#     mapping = {}
-#     edge_index_from = []
-#     edge_index_to = []
-
-#     for node, edges in g.edges_by_node().items():
-#         fr_uid = mapping.setdefault(node, len(mapping))
-#         for edge in edges:
-#             to_uid = mapping.setdefault(edge.destination, len(mapping))
-#             edge_index_from.append(fr_uid)
-#             edge_index_to.append(to_uid)
-
-#     return mapping, torch.tensor([edge_index_from, edge_index_to])
