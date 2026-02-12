@@ -18,6 +18,29 @@ class _ReporterWrapper:
             self.last_message = message
 
 
+def _get_device(device_hint: str | None) -> torch.device:
+    if device_hint is None:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    else:
+        device = torch.device(device_hint)
+    return device
+
+
+def line(g: Graph, *,
+         weighted: bool = True,
+         embedding_size: int = 128,
+         num_negative_samples: int = 5,
+         learning_rate: float = 0.01,
+         batch_size: int = 32,
+         sparse: bool = False,
+         epochs: int = 5,
+         progress_reporter: typing.Callable[[int, str], None] = lambda x, y: None,
+         num_threads: int = 1,
+         device_hint: str | None = None:
+    device = _get_device(device_hint)
+
+
+
 
 def node2vec(g: Graph, *,
              node2vec_model: type[AbstractNode2Vec] = DefaultNode2Vec,
@@ -45,10 +68,7 @@ def node2vec(g: Graph, *,
              n_workers: int = 1,
              node2vec_model: type[_node2vec.Node2Vec],
              **kwargs) -> tuple[torch.Tensor, dict[NodeRef, int], list[float]]:
-    if device_hint is None:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    else:
-        device = torch.device(device_hint)
+    device = _get_device(device_hint)
 
     progress_reporter(0, 'Initialising model')
     model = node2vec_model(
