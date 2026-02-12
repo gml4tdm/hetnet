@@ -1,9 +1,10 @@
 import typing
-import warnings
 
 import torch
 
-from .core import Graph, NodeRef
+from .core import Graph
+from .utils.containers import ObjectIdMapping
+from .utils.rng import AliasSampler
 
 
 class LINEModel(torch.nn.Module):
@@ -17,55 +18,105 @@ class LINEModel(torch.nn.Module):
     def __init__(self,
                  g: Graph,
                  *,
+                 order: int = 1,
                  weighted: bool = True,
                  embedding_size: int = 128,
                  num_negative_samples: int = 5,
-                 sparse: bool = False,
-                 num_threads: int = 1):
+                 sparse: bool = False):
         super().__init__()
-        self._weighted = weighted
-        self._embedding_size = embedding_size
-        self._num_negative_samples = num_negative_samples
-        self._num_threads = num_threads
-        self._num_nodes = len(g.node_list())
-        self._sparse = sparse
+        if order not in (1, 2):
+            raise ValueError('LINE only supports orders 1 and 2')
+        self.order = order
+        self.weighted = weighted
+        self.embedding_size = embedding_size
+        self.num_negative_samples = num_negative_samples
+        self.num_nodes = len(g.node_list())
+        self.sparse = sparse
         self._node_embeddings = torch.nn.Embedding(
-            self.num_nodes, self.embedding_dim, sparse=sparse
+            self.num_nodes, self.embedding_size, sparse=sparse
         )
-        self._context_embeddings = torch.nn.Embedding(
-            self.num_nodes, self.embedding_dim, sparse=sparse
-        )
-
-    @abc.abstractmethod
-    def build(self, input_size: int) -> torch.nn.Module:
-        pass
-
-    def forward(self,
-                batch: typing.Optional[torch.Tensor],
-                *args,
-                which: typing.Literal['first', 'second', 'both'],
-                normalise: bool = False) -> torch.Tensor:
-        if which == 'first':
-            emb = self._node_embeddings(batch)
-            if normalise:
-                emb = torch.nn.functional.normalize(emb, p=2, dim=1)
-            return emb
-        elif which == 'second':
-            emb = self._context_embeddings(batch)
-            if normalise:
-                emb = torch.nn.functional.normalize(emb, p=2, dim=1)
-            return emb
-        elif which == 'both':
-            if not normalise:
-                warnings.warn('Joint embedding without normalisation')]
-            batch_1st = self._node_embeddings(batch)
-            batch_2nd = self._context_embeddings(batch)
-            if normalise:
-                batch_1st = torch.nn.functional.normalize(batch_1st, p=2, dim=1)
-                batch_2nd = torch.nn.functional.normalize(batch_2nd, p=2, dim=1)
-            combined = torch.cat([batch_1st, batch_2nd], dim=1)
-            if normalise:
-                combined = torch.nn.functional.normalize(combined, p=2, dim=1)
-            return combined
+        if self.order == 2:
+            self._context_embeddings = torch.nn.Embedding(
+                self.num_nodes, self.embedding_size, sparse=sparse
+            )
         else:
-            raise ValueError(f'Invalid value for which: {which}')
+            self._context_embeddings = None
+        edge_mapping = ObjectIdMapping()
+        edges = []
+        edge_weights = []
+        for edge in g.edge_list():
+            edges.append(
+                [edge_mapping[edge.source], edge_mapping[edge.destination]]
+            )
+            edge_weights.append(
+                edge.weight if self.weighted else 1.0
+            )
+        self._edges = torch.tensor(edges, dtype=torch.long)
+        self._edge_weights = torch.tensor(edge_weights)
+        self._edge_sampler = AliasSampler(self._edge_weights)
+
+        node_mapping = ObjectIdMapping()
+        nodes = g.node_list()
+        self._nodes = [node_mapping[node.uid] for node in nodes]
+        self.node_to_index_mapping = {
+            ref.uid: i for ref, i in zip(nodes, self._nodes)
+        }
+        edges = g.edges_by_node()
+        self._node_sampler = AliasSampler(torch.tensor([
+            pow(len(edges[node.uid]), 3/4) for node in g.node_list()
+        ]))
+
+    @property
+    def embedding(self):
+        emb = self._node_embeddings.weight.detach().cpu()
+        return torch.nn.functional.normalize(emb, p=2, dim=1)
+
+    def reset_parameters(self):
+        self._node_embeddings.reset_parameters()
+        if self._context_embeddings is not None:
+            self._context_embeddings.reset_parameters()
+
+    def forward(self, batch: typing.Optional[torch.Tensor]) -> torch.Tensor:
+        raise NotImplementedError(
+            '.forward(...) is not implemented. '
+            'Call .loss(...) directly for training.'
+        )
+
+    def loss(self, pos, neg):
+        if self.order == 1:
+            embedding = self._node_embeddings
+        else:
+            embedding = self._context_embeddings
+        pos_loss = self._partial_loss(pos, 1, embedding)
+        neg_loss = self._partial_loss(neg, -1, embedding)
+        return -(pos_loss + neg_loss)
+
+    def _partial_loss(self, x, alpha, embedding):
+        fr, to = x[:, 0], x[:, 1]
+        h_fr = self._node_embeddings(fr)
+        h_to = embedding(to)
+        log_probs = torch.nn.functional.logsigmoid(
+            alpha * torch.sum(h_fr * h_to, dim=1)
+        )
+        return log_probs.sum()
+
+    def loader(self, **kwargs):
+        return torch.utils.data.DataLoader(
+            range(self.num_nodes), collate_fn=self._sample, **kwargs    # type: ignore
+        )
+
+    def _sample(self,
+                batch: list[int] | torch.Tensor):
+        if not isinstance(batch, torch.Tensor):
+            batch = torch.tensor(batch)
+        n_positive = batch.size(0)
+        edge_index = self._edge_sampler.sample(n_positive)
+        n_negative = n_positive * self.num_negative_samples
+        node_index = self._node_sampler.sample(n_negative)
+        positives = self._edges[edge_index]
+        from_nodes = positives[:, 0].repeat(self.num_negative_samples)
+        negatives = torch.stack(
+            [from_nodes, node_index]    # node_index can be used as-is
+        )
+        negatives = negatives.transpose(0, 1)
+        return positives, negatives

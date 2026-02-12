@@ -4,6 +4,7 @@ import torch
 
 from .core import Graph, NodeRef
 from ._node2vec import AbstractNode2Vec, Node2Vec as DefaultNode2Vec
+from ._line import LINEModel
 
 
 class _ReporterWrapper:
@@ -27,6 +28,7 @@ def _get_device(device_hint: str | None) -> torch.device:
 
 
 def line(g: Graph, *,
+         order: typing.Literal['first', 'second', 'combined'],
          weighted: bool = True,
          embedding_size: int = 128,
          num_negative_samples: int = 5,
@@ -35,11 +37,61 @@ def line(g: Graph, *,
          sparse: bool = False,
          epochs: int = 5,
          progress_reporter: typing.Callable[[int, str], None] = lambda x, y: None,
-         num_threads: int = 1,
-         device_hint: str | None = None:
+         device_hint: str | None = None):
+    progress_reporter_raw = progress_reporter
+    progress_reporter = _ReporterWrapper(progress_reporter)
     device = _get_device(device_hint)
 
+    progress_reporter(0, 'Initialising model')
+    num_order = 1 if order in ('first', 'combined') else 2
+    model = LINEModel(
+        g,
+        order=num_order,
+        weighted=weighted,
+        embedding_size=embedding_size,
+        num_negative_samples=num_negative_samples,
+        sparse=sparse,
+    )
+    model = model.to(device)
+    progress_reporter(0, 'Model ready')
 
+    _losses = _training_loop(
+        model=model, device=device, epochs=epochs, batch_size=batch_size,
+        sparse=sparse, learning_rate=learning_rate, num_workers=0,
+        progress_reporter=progress_reporter
+    )
+
+    progress_reporter(100, 'Done')
+
+    embeddings_1 = model.embedding
+    mapping_1 = model.node_to_index_mapping
+
+    if order == 'combined':
+        embeddings_2, mapping_2 = line(
+            g,
+            order='second',
+            weighted=weighted,
+            embedding_size=embedding_size,
+            num_negative_samples=num_negative_samples,
+            learning_rate=learning_rate,
+            batch_size=batch_size,
+            sparse=sparse,
+            epochs=epochs,
+            progress_reporter=progress_reporter_raw,
+        )
+        # Note: the embeddings are already normalised
+        assert mapping_1.keys() == mapping_2.keys()
+        embeddings = torch.stack([
+            torch.cat([
+                embeddings_1[mapping_1[uid], :],
+                embeddings_2[mapping_2[uid], :]
+            ])
+            for uid in mapping_1
+        ])
+        return embeddings, mapping_1
+
+    else:
+        return embeddings_1, mapping_1
 
 
 def node2vec(g: Graph, *,
@@ -65,9 +117,8 @@ def node2vec(g: Graph, *,
              num_workers: int = 1,
              device_hint: str | None = None,
              fast_walker: bool = False,
-             n_workers: int = 1,
-             node2vec_model: type[_node2vec.Node2Vec],
              **kwargs) -> tuple[torch.Tensor, dict[NodeRef, int], list[float]]:
+    progress_reporter = _ReporterWrapper(progress_reporter)
     device = _get_device(device_hint)
 
     progress_reporter(0, 'Initialising model')
@@ -85,12 +136,32 @@ def node2vec(g: Graph, *,
         unigram_walks_per_node=unigram_walks_per_node,
         sparse=sparse,
         fast_walker=fast_walker,
-        n_workers=num_threads
+        n_workers=num_threads,
+        **kwargs
     )
     model = model.to(device)
 
     progress_reporter(0, 'Model ready')
 
+    losses = _training_loop(
+        model=model, device=device, epochs=epochs, batch_size=batch_size,
+        sparse=sparse, learning_rate=learning_rate, num_workers=num_workers,
+        progress_reporter=progress_reporter
+    )
+    progress_reporter(100, 'Done')
+
+    embeddings = model.embedding.weight.detach().cpu()
+    return embeddings, model.node_to_index_mapping, losses
+
+
+def _training_loop(model,
+                   device,
+                   epochs: int,
+                   batch_size: int,
+                   sparse: bool,
+                   learning_rate: float,
+                   num_workers: int,
+                   progress_reporter: _ReporterWrapper):
     loader = model.loader(batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
     if sparse:
@@ -108,7 +179,7 @@ def node2vec(g: Graph, *,
         total_loss = 0
         for pos_rw, neg_rw, *args in loader:
             optimiser.zero_grad()
-            loss = model.loss(pos_rw.to(device), neg_rw.to(device), *args)
+            loss = model.loss(_to(pos_rw, device), _to(neg_rw, device), *args)
             loss.backward()
             optimiser.step()
             total_loss += loss.item()
@@ -119,7 +190,15 @@ def node2vec(g: Graph, *,
             )
         losses.append(total_loss / norm)
 
-    progress_reporter(100, 'Done')
+    return losses
 
-    embeddings = model.embedding.weight.detach().cpu()
-    return embeddings, model.node_to_index_mapping, losses
+
+def _to(obj, device):
+    if isinstance(obj, torch.Tensor):
+        return obj.to(device)
+    elif isinstance(obj, tuple):
+        return tuple(_to(x, device) for x in obj)
+    else:
+        raise NotImplementedError(
+            f'Cannot convert {type(obj)} to {device}'
+        )
