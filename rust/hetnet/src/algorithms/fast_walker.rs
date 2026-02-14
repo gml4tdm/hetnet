@@ -16,13 +16,43 @@ use crate::walkers::{GraphExplorer, Neighbours, Node2VecArgs};
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-pub struct CachedNode2VecWalker {
-    graph_uid: usize,
-    base_matrix: Vec<AliasSampler<(usize, usize)>>,
-    transition_matrix: Vec<AliasSampler<(usize, usize)>>
-}
+pub struct CachedNode2VecWalker(CachedWalkerInternal);
 
 impl CachedNode2VecWalker {
+    pub fn estimate_size(g: &crate::graph::HeteroDiGraph) -> usize {
+        CachedWalkerInternal::estimate_size(g)
+    }
+
+    pub fn estimate_size_as_undirected(g: &crate::graph::HeteroDiGraph) -> usize {
+        CachedWalkerInternal::estimate_size_as_undirected(g)
+    }
+
+    pub fn new<G>(explorer: G, config: Node2VecArgs) -> HetNetResult<Self>
+    where
+        G: GraphExplorer<Config=Node2VecArgs>
+    {
+        Ok(Self(CachedWalkerInternal::new(explorer, config)?))
+    }
+
+    pub fn walk_from(&self, start: NodeRef, path_length: usize) -> HetNetResult<Vec<NodeRef>> {
+        self.0.walk_from(start, path_length)
+    }
+}
+
+
+enum CachedWalkerInternal {
+    FirstOrder {
+        graph_uid: usize,
+        matrix: Vec<AliasSampler<usize>>,
+    },
+    SecondOrder {
+        graph_uid: usize,
+        base_matrix: Vec<AliasSampler<(usize, usize)>>,
+        transition_matrix: Vec<AliasSampler<(usize, usize)>>
+    }
+}
+
+impl CachedWalkerInternal {
     pub fn estimate_size(g: &crate::graph::HeteroDiGraph) -> usize {
         Self::estimate_size_helper(g, 0)
     }
@@ -54,6 +84,34 @@ impl CachedNode2VecWalker {
     }
 
     pub fn new<G>(explorer: G, config: Node2VecArgs) -> HetNetResult<Self>
+    where
+        G: GraphExplorer<Config=Node2VecArgs>
+    {
+        if config.p == 1.0 && config.q == 1.0 {
+            Self::new_first_order(explorer, config)
+        } else {
+            Self::new_second_order(explorer, config)
+        }
+    }
+
+    fn new_first_order<G>(explorer: G, config: Node2VecArgs) -> HetNetResult<Self>
+    where
+        G: GraphExplorer<Config=Node2VecArgs>
+    {
+        let g = explorer.graph();
+
+        let neighbours = g.neighbours();
+        let mut matrix = Vec::with_capacity(g.nodes.len());
+        for u in 0..g.nodes.len() {
+            let hist = neighbours.neighbours(RawNodeRef(u), &mut None, &config)?;
+            let dist = hist.into_iter().map(|(RawNodeRef(v), p)| (v, p)).collect();
+            matrix.push(AliasSampler::new(dist));
+        }
+
+        Ok(Self::FirstOrder { graph_uid: g.uid, matrix })
+    }
+
+    fn new_second_order<G>(explorer: G, config: Node2VecArgs) -> HetNetResult<Self>
     where
         G: GraphExplorer<Config=Node2VecArgs>
     {
@@ -94,7 +152,7 @@ impl CachedNode2VecWalker {
             }
         }
 
-        Ok(Self { graph_uid: g.uid, base_matrix, transition_matrix })
+        Ok(Self::SecondOrder { graph_uid: g.uid, base_matrix, transition_matrix })
     }
 
     fn collect_incoming_nodes(g: &crate::graph::HeteroDiGraph) -> Vec<BTreeSet<usize>> {
@@ -129,30 +187,48 @@ impl CachedNode2VecWalker {
         Ok(AliasSampler::new(dist))
     }
 
+    fn walk_from(&self, start: NodeRef, path_length: usize) -> HetNetResult<Vec<NodeRef>> {
+        match self {
+            Self::FirstOrder { graph_uid, matrix } => {
+                let guid = *graph_uid;
+                if guid != start.graph_uid {
+                    return Err(HetNetError::InvalidReference);
+                }
+                let mut rng = rand::rng();
+                let mut path = Vec::with_capacity(path_length);
+                path.push(start);
+                let mut current = start.downgrade().0;
+                for _ in 0..path_length {
+                    current = matrix[current].sample(&mut rng);
+                }
+                Ok(path)
+            }
+            Self::SecondOrder { graph_uid, base_matrix, transition_matrix } => {
+                let guid = *graph_uid;
+                if guid != start.graph_uid {
+                    return Err(HetNetError::InvalidReference);
+                }
 
-    pub fn walk_from(&self, start: NodeRef, path_length: usize) -> HetNetResult<Vec<NodeRef>> {
-        if self.graph_uid != start.graph_uid {
-            return Err(HetNetError::InvalidReference);
+                let mut rng = rand::rng();
+
+                let mut path = Vec::with_capacity(path_length);
+                path.push(start);
+                let mut current = start.downgrade().0;
+                let mut node;
+
+                // Perform the first fully random jump
+                //#current = Self::jump(&self.base_matrix[current], &mut rng);
+                (node, current) = base_matrix[current].sample(&mut rng);
+                path.push(RawNodeRef(node).upgrade(guid));
+
+                // For the remainder of the walk, perform 2nd order jumps
+                for _ in 0..path_length - 1 {
+                    (node, current) = transition_matrix[current].sample(&mut rng);
+                    path.push(RawNodeRef(node).upgrade(guid));
+                }
+
+                Ok(path)
+            }
         }
-
-        let mut rng = rand::rng();
-
-        let mut path = Vec::with_capacity(path_length);
-        path.push(start);
-        let mut current = start.downgrade().0;
-        let mut node;
-
-        // Perform the first fully random jump
-        //#current = Self::jump(&self.base_matrix[current], &mut rng);
-        (node, current) = self.base_matrix[current].sample(&mut rng);
-        path.push(RawNodeRef(node).upgrade(self.graph_uid));
-
-        // For the remainder of the walk, perform 2nd order jumps
-        for _ in 0..path_length - 1 {
-            (node, current) = self.transition_matrix[current].sample(&mut rng);
-            path.push(RawNodeRef(node).upgrade(self.graph_uid));
-        }
-
-        Ok(path)
     }
 }

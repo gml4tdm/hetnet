@@ -24,8 +24,9 @@ impl<T: Copy> AliasSampler<T> {
     pub fn new(dist: HashMap<T, f64>) -> Self {
         let size = dist.len();
         let n = dist.len() as f64;
+        let total = dist.values().sum::<f64>();
         let mut probability_table = dist.into_iter()
-            .map(|(item, p)| (p * n, item))
+            .map(|(item, p)| (p * n / total, item))
             .collect::<Vec<_>>();
         let mut alias_table = Vec::with_capacity(size);
 
@@ -49,7 +50,12 @@ impl<T: Copy> AliasSampler<T> {
             }
         }
 
-        Self { _n: n, probability_table, alias_table, uniform: Uniform::new(0.0, n).unwrap() }
+        Self {
+            _n: n,
+            probability_table,
+            alias_table,
+            uniform: Uniform::new(0.0, n).expect("AliasSampler: Empty distribution")
+        }
     }
 
 
@@ -58,7 +64,7 @@ impl<T: Copy> AliasSampler<T> {
         let j = u.floor();
         let idx = j as usize;
         let (p, item) = self.probability_table[idx];
-        if u - j <= p {
+        if u - j < p {
             item
         } else {
             self.alias_table[idx]
