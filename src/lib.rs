@@ -434,7 +434,7 @@ impl PyFastWalker {
     }
 
     fn order(&self) -> usize {
-        self.0.order()
+        self.inner.order()
     }
 }
 
