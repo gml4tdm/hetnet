@@ -37,6 +37,13 @@ impl CachedNode2VecWalker {
     pub fn walk_from(&self, start: NodeRef, path_length: usize) -> HetNetResult<Vec<NodeRef>> {
         self.0.walk_from(start, path_length)
     }
+
+    pub fn order(&self) -> usize {
+        match &self.0 {
+            CachedWalkerInternal::FirstOrder { .. } => 1,
+            CachedWalkerInternal::SecondOrder { .. } => 2,
+        }
+    }
 }
 
 
