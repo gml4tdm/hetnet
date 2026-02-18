@@ -20,26 +20,30 @@ def write_pseudo_json(g: Graph,
                filename: pathlib.Path, *,
                encoding='utf8'):
     with open(filename, 'w', encoding=encoding) as file:
+        node_uid_mapping = {}
         for node in g.node_list():
+            node_id = node_uid_mapping.setdefault(
+                node.uid, len(node_uid_mapping)
+            )
             record = {
                 'type': 'node',
                 'labels': [node.type],
-                'properties': g.node_properties(node),
-                'id': repr(node.uid)
+                'properties': g.node_properties(node.uid),
+                'id': node_id,
             }
             file.write(json.dumps(record) + '\n')
-        for edge in g.edge_list():
+        for i, edge in enumerate(g.edge_list()):
             record = {
                 'type': 'relationship',
                 'start': {
-                    'id': repr(edge.source.uid)
+                    'id': node_uid_mapping[edge.source],
                 },
                 'end': {
-                    'id': repr(edge.destination.uid)
+                    'id': node_uid_mapping[edge.destination],
                 },
                 'label': edge.type,
-                'properties': g.edge_properties(edge),
-                'id': repr(edge.uid)
+                'properties': g.edge_properties(edge.uid),
+                'id': str(i),
             }
             file.write(json.dumps(record) + '\n')
 
