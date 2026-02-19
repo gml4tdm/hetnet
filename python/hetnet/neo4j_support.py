@@ -18,7 +18,7 @@ def _json_loader(x):
 
 def write_pseudo_json(g: Graph,
                filename: pathlib.Path, *,
-               encoding='utf8'):
+               encoding='utf-8-sig'):
     with open(filename, 'w', encoding=encoding) as file:
         node_uid_mapping = {}
         for node in g.node_list():
