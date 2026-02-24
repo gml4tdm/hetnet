@@ -17,11 +17,12 @@ def _json_loader(x):
 
 
 def write_pseudo_json(g: Graph,
-               filename: pathlib.Path, *,
-               encoding='utf8'):
+                      filename: pathlib.Path, *,
+                      encoding='utf8',
+                      flush_after: int | None = None):
     with open(filename, 'w', encoding=encoding) as file:
         node_uid_mapping = {}
-        for node in g.node_list():
+        for i, node in enumerate(g.node_list()):
             node_id = node_uid_mapping.setdefault(
                 node.uid, len(node_uid_mapping)
             )
@@ -32,6 +33,8 @@ def write_pseudo_json(g: Graph,
                 'id': node_id,
             }
             file.write(json.dumps(record) + '\n')
+            if flush_after is not None and (i + 1) % flush_after == 0:
+                file.flush()
         for i, edge in enumerate(g.edge_list()):
             record = {
                 'type': 'relationship',
@@ -46,6 +49,8 @@ def write_pseudo_json(g: Graph,
                 'id': str(i),
             }
             file.write(json.dumps(record) + '\n')
+            if flush_after is not None and (i + 1) % flush_after == 0:
+                file.flush()
 
 
 def load_json(filename: pathlib.Path | str, *,
