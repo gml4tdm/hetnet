@@ -207,6 +207,7 @@ impl CachedWalkerInternal {
                 let mut current = start.downgrade().0;
                 for _ in 0..path_length {
                     current = matrix[current].sample(&mut rng);
+                    path.push(RawNodeRef(current).upgrade(guid));
                 }
                 Ok(path)
             }
