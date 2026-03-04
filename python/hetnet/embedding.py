@@ -172,15 +172,15 @@ def _training_loop(model,
     loader = model.loader(batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
     if sparse:
-        optimiser = torch.optim.SparseAdam(model.parameters(), lr=learning_rate)
+        optimiser = torch.optim.SparseAdam(list(model.parameters()), lr=learning_rate)
     else:
-        optimiser = torch.optim.Adam(model.parameters(), lr=learning_rate)
+        optimiser = torch.optim.Adam(list(model.parameters()), lr=learning_rate)
 
     progress_reporter(0, 'Training')
     n_steps_per_epoch = len(loader)
     n_total_steps = epochs * n_steps_per_epoch
     n_steps = 0
-    norm = len(loader) * (1 + model.num_negative_samples)
+    norm = len(loader) * (1 + model.num_negative_samples) * batch_size
     losses = []
     for epoch in range(epochs):
         total_loss = 0

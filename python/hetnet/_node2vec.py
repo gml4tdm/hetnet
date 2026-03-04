@@ -112,8 +112,11 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
             else:
                 paths = self.walker.walks(all_nodes, self.walk_length)
             for path in paths:
-                for node in path:
-                    hist[self.node_to_index_mapping[node]] += 1
+                path_index = [self.node_to_index_mapping[node] for node in path]
+                hist[path_index] += 1
+                # Not doing the for-loop saves about an order of magnitude
+                #for node in path:
+                #    hist[self.node_to_index_mapping[node]] += 1
         return hist / (self.num_nodes * self.unigram_walks_per_node)
 
     def reset_parameters(self):
