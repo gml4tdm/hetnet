@@ -121,6 +121,11 @@ def node2vec(g: Graph, *,
              fast_walker: bool = False,
              **kwargs) -> tuple[torch.Tensor, dict[NodeRef, int], list[float]]:
     progress_reporter = _ReporterWrapper(progress_reporter)
+
+    if torch.get_num_threads() != num_threads:
+        warnings.warn(f'Setting torch num_threads to {num_threads}')
+        torch.set_num_threads(num_threads)
+
     device = _get_device(device_hint)
 
     progress_reporter(0, 'Initialising model')
