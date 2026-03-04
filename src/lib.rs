@@ -417,7 +417,7 @@ impl PyFastWalker {
         Ok(py_path)
     }
 
-    fn walks(&self, py: Python, starts: Vec<PyNodeRef>, path_length: usize) -> PyResult<Vec<Vec<PyNodeRef>>> {
+    fn walks(&self, starts: Vec<PyNodeRef>, path_length: usize) -> PyResult<Vec<Vec<PyNodeRef>>> {
         if self.n_workers == 1 {
             let mut matrix = Vec::with_capacity(starts.len());
             for start in starts {
@@ -425,12 +425,10 @@ impl PyFastWalker {
             }
             Ok(matrix)
         } else {
-            py.allow_threads(|| {
-                self.pool.install(|| {
-                    starts.into_par_iter()
-                        .map(|start| self.walk(start, path_length))
-                        .collect::<Result<Vec<_>, _>>()
-                })
+            self.pool.install(|| {
+                starts.into_par_iter()
+                    .map(|start| self.walk(start, path_length))
+                    .collect::<Result<Vec<_>, _>>()
             })
         }
     }
