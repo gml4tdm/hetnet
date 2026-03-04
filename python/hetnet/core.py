@@ -119,9 +119,14 @@ class Graph:
     def meta_path_subgraph(self,
                            metapaths: dict[str, MetaPath], *,
                            unique_nodes=True,
+                           allow_unknown_types=False,
                            index: str | list[str] | tuple[str, ...] | None = None) -> Graph:
         return Graph(
-            self._graph.meta_path_subgraph(metapaths, unique_nodes=unique_nodes),
+            self._graph.meta_path_subgraph(
+                metapaths,
+                unique_nodes=unique_nodes,
+                allow_unknown_types=allow_unknown_types
+            ),
             index=index
         )
 

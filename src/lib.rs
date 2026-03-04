@@ -141,15 +141,17 @@ impl PyHeteroDiGraph {
         Ok(PyHeteroDiGraph(convert_result(self.0.deduplicate_edges(types, dh, wh))?))
     }
 
-    #[pyo3(signature = (meta_paths, *, unique_nodes = true))]
+    #[pyo3(signature = (meta_paths, *, unique_nodes = true, allow_unknown_types = false))]
     fn meta_path_subgraph(&self,
-                          meta_paths: HashMap<String, PyMetaPath>, unique_nodes: bool) -> PyResult<Self>
+                          meta_paths: HashMap<String, PyMetaPath>,
+                          unique_nodes: bool,
+                          allow_unknown_types: bool) -> PyResult<Self>
     {
         let meta_paths = meta_paths.into_iter()
             .map(|(name, meta_path)| (name, meta_path.0))
             .collect();
         Ok(PyHeteroDiGraph(
-            convert_result(self.0.meta_path_subgraph(meta_paths, unique_nodes))?
+            convert_result(self.0.meta_path_subgraph(meta_paths, unique_nodes, allow_unknown_types))?
         ))
     }
 

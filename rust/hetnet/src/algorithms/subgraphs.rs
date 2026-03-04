@@ -106,15 +106,22 @@ impl HeteroDiGraph {
     pub fn meta_path_subgraph(
         &self,
         meta_paths: Vec<(String, MetaPath<String>)>,
-        unique_nodes: bool) -> HetNetResult<Self>
+        unique_nodes: bool,
+        allow_unknown_types: bool) -> HetNetResult<Self>
     {
         // Convert meta-paths to numerical types
         let meta_paths = meta_paths.into_iter()
             .map(
                 |(name, mp)|
-                    Ok((name, self.resolve_meta_path(mp)?))
+                    Ok((name, self.resolve_meta_path(mp, allow_unknown_types)?))
             )
-            .collect::<Result<Vec<(String, MetaPath<usize>)>, HetNetError>>()?;
+            .collect::<Result<Vec<(String, Option<MetaPath<usize>>)>, HetNetError>>()?;
+        let meta_paths = meta_paths.into_iter()
+            .filter_map(|(name, opt)| match opt {
+                Some(mp) => Some((name, mp)),
+                None => None
+            })
+            .collect::<Vec<(String, MetaPath<usize>)>>();
 
         let edge_types = meta_paths.iter()
             .map(|(name, _)| name)

@@ -12,11 +12,20 @@ impl HeteroDiGraph {
         Ok(converted)
     }
 
-    pub(super) fn resolve_meta_path(&self, mp: MetaPath<String>) -> HetNetResult<MetaPath<usize>> {
-        let resolved = mp.resolve_types(
+    pub(super) fn resolve_meta_path(
+        &self,
+        mp: MetaPath<String>,
+        allow_unknown_types: bool
+    ) -> HetNetResult<Option<MetaPath<usize>>>
+    {
+        let result = mp.resolve_types(
             &self.node_metadata.node_types_reverse,
             &self.edge_metadata.edge_types_reverse
-        )?;
-        Ok(resolved)
+        );
+        match result {
+            Ok(mp) => Ok(Some(mp)),
+            Err(_) if allow_unknown_types => Ok(None),
+            Err(e) => Err(e.into())
+        }
     }
 }

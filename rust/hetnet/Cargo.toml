@@ -7,4 +7,3 @@ edition = "2024"
 error_set = "0.8.5"
 pyo3 = "0.25.1"
 rand = "0.9.1"
-
