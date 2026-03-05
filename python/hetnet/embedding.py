@@ -170,6 +170,11 @@ def _training_loop(model,
             'num_workers is set to 0 on Windows due to pickle compatibility issues.'
         )
         num_workers = 0
+    elif num_workers == 1:
+        warnings.warn(
+            'num_workers is set to 0 ifs equal to 1 due to hanging issues in Rayon.'
+        )
+        num_workers = 0
     loader = model.loader(batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
     if sparse:
