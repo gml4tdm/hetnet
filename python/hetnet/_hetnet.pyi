@@ -66,7 +66,8 @@ class Graph:
         self,
         types: list[str], *,
         data_handling: typing.Literal['discard', 'enforce_identical'],
-        weight_handling: typing.Literal['set_to_one', 'enforce_identical', 'sum_aggregate']) -> Graph: ...
+        weight_handling: typing.Literal['set_to_one', 'enforce_identical', 'sum_aggregate'],
+        allow_unknown_types: bool = False) -> Graph: ...
     def random_walk(self,
                     start: NodeRef, *,
                     weighted: bool = True,
