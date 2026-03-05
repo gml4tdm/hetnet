@@ -108,11 +108,16 @@ class Graph:
         self,
         *types: str,
         data_handling: typing.Literal['discard', 'enforce_identical'],
-        weight_handling: typing.Literal['set_to_one', 'enforce_identical', 'sum_aggregate']
+        weight_handling: typing.Literal['set_to_one', 'enforce_identical', 'sum_aggregate'],
+        allow_unknown_types: bool = False
     ) -> Graph:
         return Graph(
             self._graph.deduplicate_edges(
-                list(types), data_handling=data_handling, weight_handling=weight_handling),
+                list(types),
+                data_handling=data_handling,
+                weight_handling=weight_handling,
+                allow_unknown_types=allow_unknown_types
+            ),
             index=self._raw_index
         )
 
