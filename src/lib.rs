@@ -110,11 +110,12 @@ impl PyHeteroDiGraph {
         PyHeteroDiGraph(self.0.to_markov_graph())
     }
 
-    #[pyo3(signature = (types, *, data_handling, weight_handling))]
+    #[pyo3(signature = (types, *, data_handling, weight_handling, allow_unknown_types = false))]
     fn deduplicate_edges(&self,
                          types: Vec<String>,
                          data_handling: String,
-                         weight_handling: String) -> PyResult<Self> {
+                         weight_handling: String,
+                         allow_unknown_types: bool) -> PyResult<Self> {
         let dh = match data_handling.as_str() {
             "discard" => dedup::DataHandling::Discard,
             "enforce_identical" => dedup::DataHandling::EnforceIdentical,
@@ -138,7 +139,7 @@ impl PyHeteroDiGraph {
                 ));
             }
         };
-        Ok(PyHeteroDiGraph(convert_result(self.0.deduplicate_edges(types, dh, wh))?))
+        Ok(PyHeteroDiGraph(convert_result(self.0.deduplicate_edges(types, dh, wh, allow_unknown_types))?))
     }
 
     #[pyo3(signature = (meta_paths, *, unique_nodes = true, allow_unknown_types = false))]

@@ -38,10 +38,11 @@ impl HeteroDiGraph {
     pub fn deduplicate_edges(&self,
                              types: Vec<String>,
                              data_handling: DataHandling,
-                             weight_handling: WeightHandling) -> HetNetResult<Self>
+                             weight_handling: WeightHandling,
+                             allow_unknown_types: bool) -> HetNetResult<Self>
     {
         // Convert edge types
-        let dedup = self.convert_edge_types(types)?.into_iter()
+        let dedup = self.convert_edge_types(types, allow_unknown_types)?.into_iter()
             .collect::<HashSet<_>>();
 
         // Discard edges as needed
