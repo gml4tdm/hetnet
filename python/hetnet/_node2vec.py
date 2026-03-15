@@ -34,6 +34,7 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
                  num_negative_samples: int = 1,
                  negative_sampling_strategy: typing.Literal['unigram', 'uniform'] = 'uniform',
                  unigram_walks_per_node: int = 5,
+                 unigram_alpha: float = 3/4,
                  sparse: bool = False,
                  fast_walker: bool = False,
                  n_workers: int = 1):
@@ -83,7 +84,7 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
             self.negative_sampling_weights = torch.tensor(1.0 / self.num_nodes).repeat(self.num_nodes)
         else:
             self.unigram_walks_per_node = unigram_walks_per_node
-            self.negative_sampling_weights = self._unigram_probabilities().pow(3/4)
+            self.negative_sampling_weights = self._unigram_probabilities(alpha=unigram_alpha)
         self.cumulative_negative_sampling_weights = self.negative_sampling_weights.cumsum(dim=0)
         self.embedding = torch.nn.Embedding(
             self.num_nodes, self.embedding_dim, sparse=sparse
@@ -95,7 +96,7 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
     def build(self, input_size: int) -> torch.nn.Module:
         pass
 
-    def _unigram_probabilities(self) -> torch.Tensor:
+    def _unigram_probabilities(self, alpha: float) -> torch.Tensor:
         assert self.unigram_walks_per_node is not None
         all_nodes = [node.uid for node in self.graph.node_list()]
         hist = torch.zeros(self.num_nodes)
@@ -117,7 +118,8 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
                 # Not doing the for-loop saves about an order of magnitude
                 #for node in path:
                 #    hist[self.node_to_index_mapping[node]] += 1
-        return hist / (self.num_nodes * self.unigram_walks_per_node)
+        tf = hist.pow(alpha)
+        return tf / tf.sum()
 
     def reset_parameters(self):
         self.embedding.reset_parameters()
