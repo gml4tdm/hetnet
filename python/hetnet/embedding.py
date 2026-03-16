@@ -109,6 +109,7 @@ def node2vec(g: Graph, *,
              negative_sampling_strategy: typing.Literal['unigram', 'uniform'] = 'uniform',
              unigram_walks_per_node: int = 5,
              unigram_alpha: float = 3/4,
+             edge_normalistion: bool = False,
              # Training Settings
              learning_rate: float = 0.01,
              batch_size: int = 32,
@@ -125,6 +126,10 @@ def node2vec(g: Graph, *,
     device = _get_device(device_hint)
 
     progress_reporter(0, 'Initialising model')
+
+    if edge_normalistion:
+        g = _apply_edge_normalisation(g)
+
     model = node2vec_model(
         g,
         weighted=weighted,
@@ -156,6 +161,21 @@ def node2vec(g: Graph, *,
 
     embeddings = model.embedding.weight.detach().cpu()
     return embeddings, model.node_to_index_mapping, losses
+
+
+def _apply_edge_normalisation(g: Graph, weighted: bool = True):
+    in_degree = collections.defaultdict(float)
+    out_degree = collections.defaultdict(float)
+    for edge in g.edge_list():
+        w = edge.weight if weighted else 1.0
+        in_degree[edge.destination] += w
+        out_degree[edge.source] += w
+    w_in = {n: math.sqrt(d) for n, d in in_degree.items()}
+    w_out = {n: math.sqrt(d) for n, d in out_degree.items()}
+    return g.update_weights({
+        edge.uid: 1 / (w_out[edge.source] * w_in[edge.destination])
+        for edge in g.edge_list()
+    })
 
 
 def _training_loop(model,
