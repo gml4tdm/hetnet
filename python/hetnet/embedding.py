@@ -128,7 +128,7 @@ def node2vec(g: Graph, *,
     progress_reporter(0, 'Initialising model')
 
     if edge_normalistion:
-        g = _apply_edge_normalisation(g)
+        g = _apply_edge_normalisation(g, weighted=False)
 
     model = node2vec_model(
         g,
