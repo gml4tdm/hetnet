@@ -31,6 +31,7 @@ class LINEModel(torch.nn.Module):
         self.embedding_size = embedding_size
         self.num_negative_samples = num_negative_samples
         self.num_nodes = len(g.node_list())
+        self.num_edges = len(g.edge_list())
         self.sparse = sparse
         self._node_embeddings = torch.nn.Embedding(
             self.num_nodes, self.embedding_size, sparse=sparse
@@ -41,20 +42,6 @@ class LINEModel(torch.nn.Module):
             )
         else:
             self._context_embeddings = None
-        edge_mapping = ObjectIdMapping()
-        edges = []
-        edge_weights = []
-        for edge in g.edge_list():
-            edges.append(
-                [edge_mapping[edge.source], edge_mapping[edge.destination]]
-            )
-            edge_weights.append(
-                edge.weight if self.weighted else 1.0
-            )
-        self._edges = torch.tensor(edges, dtype=torch.long)
-        self._edge_weights = torch.tensor(edge_weights)
-        self._edge_sampler = AliasSampler(self._edge_weights)
-
         node_mapping = ObjectIdMapping()
         nodes = g.node_list()
         self._nodes = [node_mapping[node.uid] for node in nodes]
@@ -63,8 +50,30 @@ class LINEModel(torch.nn.Module):
         }
         edges = g.edges_by_node()
         self._node_sampler = AliasSampler(torch.tensor([
-            pow(len(edges[node.uid]), 3/4) for node in g.node_list()
+            pow(
+                sum(
+                    edge.weight if weighted else 1.0
+                    for edge in edges[node.uid]
+                ),
+                3/4
+            )
+            for node in g.node_list()
         ]))
+
+        edges = []
+        edge_weights = []
+        for edge in g.edge_list():
+            edges.append(
+                [node_mapping[edge.source], node_mapping[edge.destination]]
+            )
+            edge_weights.append(
+                edge.weight if self.weighted else 1.0
+            )
+        self._edges = torch.tensor(edges, dtype=torch.long)
+        self._edge_weights = torch.tensor(edge_weights)
+        self._edge_sampler = AliasSampler(self._edge_weights)
+
+
 
     @property
     def embedding(self):
@@ -98,12 +107,20 @@ class LINEModel(torch.nn.Module):
         log_probs = torch.nn.functional.logsigmoid(
             alpha * torch.sum(h_fr * h_to, dim=1)
         )
-        return log_probs.sum()
+        return log_probs.mean()
 
     def loader(self, **kwargs):
         return torch.utils.data.DataLoader(
-            range(self.num_nodes), collate_fn=self._sample, **kwargs    # type: ignore
+            range(self.num_edges), collate_fn=self._sample, **kwargs    # type: ignore
         )
+
+    def sample_one(self):
+        edge_index = self._edge_sampler.sample(1)
+        node_index = self._node_sampler.sample(self.num_negative_samples)
+        positives = self._edges[edge_index]
+        from_nodes = torch.full((self.num_negative_samples,), positives[0, 0])
+        negatives = torch.column_stack([from_nodes, node_index])
+        return positives, negatives
 
     def _sample(self,
                 batch: list[int] | torch.Tensor):

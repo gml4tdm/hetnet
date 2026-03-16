@@ -62,7 +62,6 @@ def line(g: Graph, *,
         sparse=sparse, learning_rate=learning_rate, num_workers=0,
         progress_reporter=progress_reporter
     )
-
     progress_reporter(100, 'Done')
 
     embeddings_1 = model.embedding
