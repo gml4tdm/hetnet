@@ -109,7 +109,7 @@ def node2vec(g: Graph, *,
              negative_sampling_strategy: typing.Literal['unigram', 'uniform'] = 'uniform',
              unigram_walks_per_node: int = 5,
              unigram_alpha: float = 3/4,
-             edge_normalistion: bool = False,
+             edge_normalisation: bool = False,
              # Training Settings
              learning_rate: float = 0.01,
              batch_size: int = 32,
@@ -127,7 +127,7 @@ def node2vec(g: Graph, *,
 
     progress_reporter(0, 'Initialising model')
 
-    if edge_normalistion:
+    if edge_normalisation:
         g = _apply_edge_normalisation(g, weighted=False)
 
     model = node2vec_model(
