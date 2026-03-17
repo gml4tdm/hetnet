@@ -178,7 +178,7 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
             ],
             device=self.device,
         )
-        return self._apply_context_window(rw))
+        return self._apply_context_window(rw)
 
     def _sample_negatives(self, batch: torch.Tensor):
         # For every item in the batch, we want `num_negative_samples`,
