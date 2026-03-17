@@ -223,7 +223,7 @@ def _training_loop(model,
             loss = model.loss(_to(pos_rw, device), _to(neg_rw, device), *args)
             loss.backward()
             optimiser.step()
-            total_loss += loss.item().detach().cpu()
+            total_loss += loss.item()
             n_steps += 1
             progress_reporter(
                 n_steps * 100 // n_total_steps,
