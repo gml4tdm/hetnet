@@ -34,6 +34,7 @@ class LINEModel(torch.nn.Module):
         self.num_nodes = len(g.node_list())
         self.num_edges = len(g.edge_list())
         self.sparse = sparse
+        self.device = device
         self._node_embeddings = torch.nn.Embedding(
             self.num_nodes, self.embedding_size, sparse=sparse
         )
