@@ -162,7 +162,9 @@ def node2vec(g: Graph, *,
     progress_reporter(100, 'Done')
 
     embeddings = model.embedding.weight.detach().cpu()
-    return embeddings, model.node_to_index_mapping, losses
+
+    # We might have updated the graph, so return the updated graph as well
+    return embeddings, model.node_to_index_mapping, losses, g
 
 
 def _apply_edge_normalisation(g: Graph, weighted: bool = True):
