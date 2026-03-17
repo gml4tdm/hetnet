@@ -22,6 +22,7 @@ class LINEModel(torch.nn.Module):
                  weighted: bool = True,
                  embedding_size: int = 128,
                  num_negative_samples: int = 5,
+                 unigram_alpha: float = 0.75,
                  sparse: bool = False,
                  device: str | None = None):
         super().__init__()
@@ -57,7 +58,7 @@ class LINEModel(torch.nn.Module):
                     edge.weight if weighted else 1.0
                     for edge in edges[node.uid]
                 ),
-                3/4
+                unigram_alpha
             )
             for node in g.node_list()
         ]))
