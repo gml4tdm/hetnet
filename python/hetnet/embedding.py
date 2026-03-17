@@ -122,7 +122,7 @@ def node2vec(g: Graph, *,
              num_workers: int = 1,
              device_hint: str | None = None,
              fast_walker: bool = False,
-             **kwargs) -> tuple[torch.Tensor, dict[NodeRef, int], list[float]]:
+             **kwargs) -> tuple[torch.Tensor, dict[NodeRef, int], list[float], Graph]:
     progress_reporter = _ReporterWrapper(progress_reporter)
 
     device = _get_device(device_hint)
