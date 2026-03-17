@@ -139,8 +139,8 @@ class LINEModel(torch.nn.Module):
             batch = torch.tensor(batch)
         n_positive = batch.size(0)
         edge_index = self._edge_sampler.sample(n_positive).to(self.device)
-        n_negative = n_positive * self.num_negative_samples.to(self.device)
-        node_index = self._node_sampler.sample(n_negative)
+        n_negative = n_positive * self.num_negative_samples
+        node_index = self._node_sampler.sample(n_negative).to(self.device)
         positives = self._edges[edge_index]
         from_nodes = positives[:, 0].repeat(self.num_negative_samples)
         negatives = torch.column_stack([from_nodes, node_index])
