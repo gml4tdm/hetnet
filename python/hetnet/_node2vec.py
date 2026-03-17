@@ -37,7 +37,8 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
                  unigram_alpha: float = 3/4,
                  sparse: bool = False,
                  fast_walker: bool = False,
-                 n_workers: int = 1):
+                 n_workers: int = 1,
+                 device: str | None = None):
         super().__init__()
         assert walk_length >= context_size
         self.weighted = weighted
@@ -53,6 +54,7 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
         self.fast_walker = fast_walker
         self.n_workers = n_workers
         self.walker = None
+        self.device = device
         if self.fast_walker:
             self.walker = self.graph.fast_walker(
                 p=self.p, q=self.q, n_workers=self.n_workers
@@ -85,16 +87,30 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
         else:
             self.unigram_walks_per_node = unigram_walks_per_node
             self.negative_sampling_weights = self._unigram_probabilities(alpha=unigram_alpha)
-        self.cumulative_negative_sampling_weights = self.negative_sampling_weights.cumsum(dim=0)
+        self.cumulative_negative_sampling_weights = self.negative_sampling_weights.cumsum(dim=0).to(self.device)
         self.embedding = torch.nn.Embedding(
-            self.num_nodes, self.embedding_dim, sparse=sparse
+            self.num_nodes, self.embedding_dim, sparse=sparse, device=self.device
         )
-        self.model = self.build(self.embedding_dim)
+        self.model = self.build(self.embedding_dim).to(self.device)
         self.reset_parameters()
 
     @abc.abstractmethod
     def build(self, input_size: int) -> torch.nn.Module:
         pass
+
+    def to(self, *args, **kwargs) -> 'Node2Vec':
+        super().to(*args, **kwargs)
+
+        if len(args) > 0 and isinstance(args[0], (torch.device, str)):
+            self.device = args[0]
+        elif "device" in kwargs and kwargs["device"] is not None:
+            self.device = kwargs["device"]
+        else:
+            self.device = next(self.parameters()).device
+
+        self.cumulative_negative_sampling_weights = self.cumulative_negative_sampling_weights.to(self.device)
+
+        return self
 
     def _unigram_probabilities(self, alpha: float) -> torch.Tensor:
         assert self.unigram_walks_per_node is not None
@@ -127,6 +143,7 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
             self.model.reset_parameters()
 
     def forward(self, batch: typing.Optional[torch.Tensor], *args) -> torch.Tensor:
+        batch = batch.to(self.device)
         x = self.embedding(batch)
         return self.model(x, *args)
 
@@ -154,22 +171,26 @@ class AbstractNode2Vec(abc.ABC, torch.nn.Module):
             )
         else:
             rw = self.walker.walks(starts, self.walk_length)
-        rw = torch.tensor([
-            [self.node_to_index_mapping[node] for node in walk]
-            for walk in rw
-        ])
-        return self._apply_context_window(rw)
+        rw = torch.tensor(
+            [
+                [self.node_to_index_mapping[node] for node in walk]
+                for walk in rw
+            ],
+            device=self.device,
+        )
+        return self._apply_context_window(rw))
 
     def _sample_negatives(self, batch: torch.Tensor):
         # For every item in the batch, we want `num_negative_samples`,
         # but also for every item (= node), we generate `walks_per_node` total pairs
+        batch = batch.to(self.device)
         batch = batch.repeat(self.num_negative_samples * self.walks_per_node)
 
         # Use binary search to generate a matrix of random walks,
         # with a walk of length `walk_length` for each item in the batch
         walks = torch.searchsorted(
             self.cumulative_negative_sampling_weights,
-            torch.rand(*(batch.size(0), self.walk_length), device=batch.device)
+            torch.rand(*(batch.size(0), self.walk_length), device=self.device)
         )
 
         # Prefix each random walk (the context) with the "center" node

@@ -22,7 +22,8 @@ class LINEModel(torch.nn.Module):
                  weighted: bool = True,
                  embedding_size: int = 128,
                  num_negative_samples: int = 5,
-                 sparse: bool = False):
+                 sparse: bool = False,
+                 device: str | None = None):
         super().__init__()
         if order not in (1, 2):
             raise ValueError('LINE only supports orders 1 and 2')
@@ -73,7 +74,17 @@ class LINEModel(torch.nn.Module):
         self._edge_weights = torch.tensor(edge_weights)
         self._edge_sampler = AliasSampler(self._edge_weights)
 
+    def to(self, *args, **kwargs) -> 'LINEModel':
+        super().to(*args, **kwargs)
 
+        if len(args) > 0 and isinstance(args[0], (torch.device, str)):
+            self.device = args[0]
+        elif "device" in kwargs and kwargs["device"] is not None:
+            self.device = kwargs["device"]
+        else:
+            self.device = next(self.parameters()).device
+
+        return self
 
     @property
     def embedding(self):
@@ -127,13 +138,10 @@ class LINEModel(torch.nn.Module):
         if not isinstance(batch, torch.Tensor):
             batch = torch.tensor(batch)
         n_positive = batch.size(0)
-        edge_index = self._edge_sampler.sample(n_positive)
-        n_negative = n_positive * self.num_negative_samples
+        edge_index = self._edge_sampler.sample(n_positive).to(self.device)
+        n_negative = n_positive * self.num_negative_samples.to(self.device)
         node_index = self._node_sampler.sample(n_negative)
         positives = self._edges[edge_index]
         from_nodes = positives[:, 0].repeat(self.num_negative_samples)
-        negatives = torch.stack(
-            [from_nodes, node_index]    # node_index can be used as-is
-        )
-        negatives = negatives.transpose(0, 1)
+        negatives = torch.column_stack([from_nodes, node_index])
         return positives, negatives

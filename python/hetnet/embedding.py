@@ -55,6 +55,7 @@ def line(g: Graph, *,
         embedding_size=embedding_size,
         num_negative_samples=num_negative_samples,
         sparse=sparse,
+        device=device
     )
     model = model.to(device)
     progress_reporter(0, 'Model ready')
@@ -81,6 +82,7 @@ def line(g: Graph, *,
             sparse=sparse,
             epochs=epochs,
             progress_reporter=progress_reporter_raw,
+            device_hint=device_hint
         )
         # Note: the embeddings are already normalised
         assert mapping_1.keys() == mapping_2.keys()
@@ -148,6 +150,7 @@ def node2vec(g: Graph, *,
         sparse=sparse,
         fast_walker=fast_walker,
         n_workers=num_threads,
+        device=device,
         **kwargs
     )
     model = model.to(device)
@@ -220,7 +223,7 @@ def _training_loop(model,
             loss = model.loss(_to(pos_rw, device), _to(neg_rw, device), *args)
             loss.backward()
             optimiser.step()
-            total_loss += loss.item()
+            total_loss += loss.item().detach().cpu()
             n_steps += 1
             progress_reporter(
                 n_steps * 100 // n_total_steps,
