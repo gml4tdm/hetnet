@@ -70,7 +70,7 @@ class LINEModel(torch.nn.Module):
             edge_weights.append(
                 edge.weight if self.weighted else 1.0
             )
-        self._edges = torch.tensor(edges, dtype=torch.long)
+        self._edges = torch.tensor(edges, dtype=torch.long, device=self.device)
         self._edge_weights = torch.tensor(edge_weights)
         self._edge_sampler = AliasSampler(self._edge_weights)
 
@@ -83,6 +83,8 @@ class LINEModel(torch.nn.Module):
             self.device = kwargs["device"]
         else:
             self.device = next(self.parameters()).device
+
+        self._edges = self._edges.to(self.device)
 
         return self
 
