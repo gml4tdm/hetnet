@@ -92,6 +92,9 @@ class Graph:
             col.append(descriptor)
         return result
 
+    def edges_for(self, node: NodeRef) -> list[EdgeDescriptor]:
+        return self._graph.edges_for(node)
+
     def node_properties(self, node: NodeRef) -> dict[str, str]:
         return self._graph.node_properties(node)
 

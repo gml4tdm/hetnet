@@ -91,12 +91,21 @@ impl PyHeteroDiGraph {
         self.0.edge_list().into_iter().map(PyEdgeDescriptor).collect()
     }
 
+    fn edges_for(&self, node: PyNodeRef) -> PyResult<Vec<PyEdgeDescriptor>> {
+        Ok(
+            convert_result(self.0.edges_for(node.0))?
+                .into_iter()
+                .map(PyEdgeDescriptor)
+                .collect()
+        )
+    }
+
     fn node_properties(&self, node: PyNodeRef) -> PyResult<&HashMap<String, String>> {
-        Ok(convert_result(self.0.node_properties(node.0))?)
+        convert_result(self.0.node_properties(node.0))
     }
 
     fn edge_properties(&self, uid: PyEdgeRef) -> PyResult<&HashMap<String, String>> {
-        Ok(convert_result(self.0.edge_properties(uid.0))?)
+        convert_result(self.0.edge_properties(uid.0))
     }
 
     fn update_weights(&self, weights: HashMap<PyEdgeRef, f64>) -> PyResult<Self> {

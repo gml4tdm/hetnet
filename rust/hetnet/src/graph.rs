@@ -152,6 +152,27 @@ impl HeteroDiGraph {
         result
     }
 
+    pub fn edges_for(&self, node: NodeRef) -> Result<Vec<EdgeDescriptor>, GraphQueryingError> {
+        if node.graph_uid != self.uid {
+            return Err(GraphQueryingError::InvalidReference);
+        }
+        let metadata = &*self.edge_metadata;
+        let edges = &self.nodes[node.node_uid].connections;
+        let descriptors = edges.iter()
+            .map(|e| {
+                let type_name = metadata.edge_types[e.r#type].clone();
+                EdgeDescriptor {
+                    uid: EdgeRef { graph_uid: self.uid, edge_uid: e.uid },
+                    from: NodeRef { graph_uid: self.uid, node_uid: node.node_uid },
+                    to: e.to.upgrade(self.uid),
+                    r#type: type_name,
+                    weight: e.weight
+                }
+            })
+            .collect();
+        Ok(descriptors)
+    }
+
     pub fn node_properties(&self, reference: NodeRef) -> Result<&HashMap<String, String>, GraphQueryingError> {
         if reference.graph_uid != self.uid {
             return Err(GraphQueryingError::InvalidReference);
