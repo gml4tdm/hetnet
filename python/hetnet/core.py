@@ -129,6 +129,24 @@ class Graph:
             index=self._raw_index
         )
 
+    def as_undirected(self) -> Graph:
+        builder = GraphBuilder(undirected=True)
+        mapping = {}
+        for node in self.node_list():
+            mapping[node.uid] = builder.add_node(
+                kind=node.type,
+                properties=self.node_properties(node.uid)
+            )
+        for edge in self.edge_list():
+            builder.add_edge(
+                mapping[edge.source],
+                mapping[edge.destination],
+                kind=edge.type,
+                weight=edge.weight,
+                properties=self.edge_properties(edge.uid)
+            )
+        return builder.build(index=self._raw_index)
+
     def meta_path_subgraph(self,
                            metapaths: dict[str, MetaPath], *,
                            unique_nodes=True,
