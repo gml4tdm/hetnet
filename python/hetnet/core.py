@@ -26,7 +26,8 @@ RandomWalkEvalResult = _hetnet.RandomWalkEvalResult
 
 class GraphBuilder:
 
-    def __init__(self):
+    def __init__(self, *, undirected: bool = False):
+        self._undirected = undirected
         self._builder = _hetnet.GraphBuilder()
 
     def add_node(self, kind: str, *, properties: dict[str, str] | None = None) -> NodeRef:
@@ -41,6 +42,10 @@ class GraphBuilder:
         self._builder.add_edge(
             source, destination, kind, weight=weight, properties=properties
         )
+        if self._undirected:
+            self._builder.add_edge(
+                destination, source, kind, weight=weight, properties=properties
+            )
 
     def build(self, index: str | list[str] | tuple[str, ...] | None = None) -> Graph:
         return Graph(self._builder.build(), index=index)
