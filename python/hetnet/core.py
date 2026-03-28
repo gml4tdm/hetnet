@@ -145,13 +145,6 @@ class Graph:
                 weight=edge.weight,
                 properties=self.edge_properties(edge.uid)
             )
-            builder.add_edge(
-                mapping[edge.destination],
-                mapping[edge.source],
-                kind=edge.type,
-                weight=edge.weight,
-                properties=self.edge_properties(edge.uid)
-            )
         return builder.build(index=self._raw_index)
 
     def meta_path_subgraph(self,
