@@ -4,6 +4,7 @@ import collections
 import typing
 
 import graphviz
+from ._pickle_compat import from_pickleble_data, to_pickleble_data
 
 try:
     from . import _hetnet
@@ -73,6 +74,18 @@ class Graph:
                     raise ValueError(f'Key {keys} is not unique')
                 mapping[node_key] = ref
             self._index = _GraphIndex(mapping=mapping, key=tuple(keys))
+
+    def __getstate__(self):
+        return {
+            'index': self._raw_index,
+            'graph': to_pickleble_data(self._graph)
+        }
+
+    def __setstate__(self, state):
+        graph_data = state['graph']
+        index = state['index']
+        obj = from_pickleble_data(graph_data[0], graph_data[1])
+        self.__init__(obj, index=index)
 
     def __repr__(self) -> str:
         return repr(self._graph)
