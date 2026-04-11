@@ -18,7 +18,8 @@ dependencies = [
     "torch_geometric",
     "torch_cluster",
     "matplotlib",
-    "networkx"
+    "networkx",
+    "igraph"
 ]
 
 [tool.maturin]
