@@ -7,7 +7,7 @@ class _IdMapper(dict):
     def __missing__(self, key):
         n = len(self)
         self[key] = n
-        return len(self)
+        return n
 
     def to_strict_dict(self):
         return {k: v for k, v in self.items()}
@@ -37,7 +37,7 @@ def personalised_pagerank(g: core.Graph,
     ig, mapping = _to_igraph_graph(g)
     scores = ig.personalized_pagerank(
         vertices=None,
-        return_vertices=[mapping[node] for node in nodes],
+        reset_vertices=[mapping[node] for node in nodes],
         weights='weight',
         damping=alpha,
         directed=True,
