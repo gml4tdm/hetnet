@@ -89,6 +89,8 @@ impl SubgraphBuilder {
                 EdgeMetadata {
                     edge_types: self.edge_types,
                     edge_types_reverse: self.edge_types_reversed,
+                    edge_property_keys: Vec::new(),
+                    edge_property_keys_reverse: HashMap::new(),
                     edge_properties: vec![HashMap::new(); self.next_edge_id]
                 }
             ),
@@ -117,10 +119,7 @@ impl HeteroDiGraph {
             )
             .collect::<Result<Vec<(String, Option<MetaPath<usize>>)>, HetNetError>>()?;
         let meta_paths = meta_paths.into_iter()
-            .filter_map(|(name, opt)| match opt {
-                Some(mp) => Some((name, mp)),
-                None => None
-            })
+            .filter_map(|(name, opt)| opt.map(|mp| (name, mp)))
             .collect::<Vec<(String, MetaPath<usize>)>>();
 
         let edge_types = meta_paths.iter()

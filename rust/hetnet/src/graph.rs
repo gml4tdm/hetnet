@@ -34,14 +34,18 @@ pub(crate) struct GraphMetadata {
 pub(crate) struct NodeMetadata {
     pub(crate) node_types: Vec<String>,
     pub(crate) node_types_reverse: HashMap<String, usize>,
-    pub(crate) node_properties: Vec<HashMap<String, String>>,
+    pub(crate) node_property_keys: Vec<String>,
+    pub(crate) node_property_keys_reverse: HashMap<String, usize>,
+    pub(crate) node_properties: Vec<HashMap<usize, String>>,
 }
 
 #[derive(Debug)]
 pub(crate) struct EdgeMetadata {
     pub(crate) edge_types: Vec<String>,
     pub(crate) edge_types_reverse: HashMap<String, usize>,
-    pub(crate) edge_properties: Vec<HashMap<String, String>>
+    pub(crate) edge_property_keys: Vec<String>,
+    pub(crate) edge_property_keys_reverse: HashMap<String, usize>,
+    pub(crate) edge_properties: Vec<HashMap<usize, String>>
 }
 
 #[derive(Debug, Clone)]
@@ -173,22 +177,34 @@ impl HeteroDiGraph {
         Ok(descriptors)
     }
 
-    pub fn node_properties(&self, reference: NodeRef) -> Result<&HashMap<String, String>, GraphQueryingError> {
+    pub fn node_properties(&self, reference: NodeRef) -> Result<HashMap<String, String>, GraphQueryingError> {
         if reference.graph_uid != self.uid {
             return Err(GraphQueryingError::InvalidReference);
         }
         let index = self.nodes.get(reference.node_uid)
             .ok_or(GraphQueryingError::InvalidNodeId{uid: reference.node_uid})?
             .property_index;
+        let prop_map = &self.node_metadata.node_property_keys;
         self.node_metadata.node_properties.get(index)
             .ok_or_else(|| panic!("No metadata for index {index}"))
+            .map(|m| 
+                m.iter()
+                    .map(|(k, v)| (prop_map[*k].clone(), v.clone()))
+                    .collect::<HashMap<String, String>>()
+            )
     }
 
-    pub fn edge_properties(&self, reference: EdgeRef) -> Result<&HashMap<String, String>, GraphQueryingError> {
+    pub fn edge_properties(&self, reference: EdgeRef) -> Result<HashMap<String, String>, GraphQueryingError> {
         if reference.graph_uid != self.uid {
             return Err(GraphQueryingError::InvalidReference);
         }
+        let prop_map = &self.edge_metadata.edge_property_keys;
         self.edge_metadata.edge_properties.get(reference.edge_uid)
             .ok_or(GraphQueryingError::InvalidEdgeId{uid: reference.edge_uid})
+            .map(|m|
+                m.iter()
+                    .map(|(k, v)| (prop_map[*k].clone(), v.clone()))
+                    .collect::<HashMap<String, String>>()
+            )
     }
 }

@@ -76,6 +76,8 @@ impl HeteroDiGraph {
                 EdgeMetadata {
                     edge_types: self.edge_metadata.edge_types.clone(),
                     edge_types_reverse: self.edge_metadata.edge_types_reverse.clone(),
+                    edge_property_keys: Vec::new(),
+                    edge_property_keys_reverse: HashMap::new(),
                     edge_properties: Vec::new()
                 }
             ),

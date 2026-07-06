@@ -100,11 +100,11 @@ impl PyHeteroDiGraph {
         )
     }
 
-    fn node_properties(&self, node: PyNodeRef) -> PyResult<&HashMap<String, String>> {
+    fn node_properties(&self, node: PyNodeRef) -> PyResult<HashMap<String, String>> {
         convert_result(self.0.node_properties(node.0))
     }
 
-    fn edge_properties(&self, uid: PyEdgeRef) -> PyResult<&HashMap<String, String>> {
+    fn edge_properties(&self, uid: PyEdgeRef) -> PyResult<HashMap<String, String>> {
         convert_result(self.0.edge_properties(uid.0))
     }
 

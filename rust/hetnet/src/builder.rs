@@ -39,8 +39,10 @@ pub struct HeteroDiGraphBuilder {
     nodes: Vec<Node>,
     node_types: HashMap<String, usize>,
     edge_types: HashMap<String, usize>,
-    node_properties: Vec<HashMap<String, String>>,
-    edge_properties: Vec<HashMap<String, String>>,
+    node_property_keys: HashMap<String, usize>,
+    edge_property_keys: HashMap<String, usize>,
+    node_properties: Vec<HashMap<usize, String>>,
+    edge_properties: Vec<HashMap<usize, String>>,
     next_edge_id: usize
 }
 
@@ -72,7 +74,15 @@ impl HeteroDiGraphBuilder {
             r#type: type_id,
             connections: Vec::new(),
         });
-        self.node_properties.push(properties.unwrap_or_default());
+        self.node_properties.push(
+            properties.unwrap_or_default()
+                .into_iter()
+                .map(|(k, v)| {
+                    let next_prop_id = self.node_property_keys.len();
+                    (*self.node_property_keys.entry(k).or_insert(next_prop_id), v)
+                })
+                .collect()
+        );
         NodeRef { graph_uid: self.graph_uid, node_uid: uid }
     }
 
@@ -100,7 +110,15 @@ impl HeteroDiGraphBuilder {
             .expect("Invalid node reference")
             .connections
             .push(edge);
-        self.edge_properties.push(properties.unwrap_or_default());
+        self.edge_properties.push(
+            properties.unwrap_or_default()
+                .into_iter()
+                .map(|(k, v)| {
+                    let next_prop_id = self.edge_property_keys.len();
+                    (*self.edge_property_keys.entry(k).or_insert(next_prop_id), v)
+                })
+                .collect()
+        );
         Ok(EdgeRef { graph_uid: self.graph_uid, edge_uid: edge.uid })
     }
 
@@ -117,14 +135,30 @@ impl HeteroDiGraphBuilder {
             .map(|(i, x)| (x.to_string(), i))
             .collect::<HashMap<_, _>>();
 
+        let node_property_keys = Self::convert_mapping(self.node_property_keys);
+        let node_property_keys_reverse = node_property_keys.iter()
+            .enumerate()
+            .map(|(i, x)| (x.to_string(), i))
+            .collect::<HashMap<_, _>>();
+        
+        let edge_property_keys = Self::convert_mapping(self.edge_property_keys);
+        let edge_property_keys_reverse = edge_property_keys.iter()
+            .enumerate()
+            .map(|(i, x)| (x.to_string(), i))
+            .collect::<HashMap<_, _>>();
+        
         let node_metadata = NodeMetadata {
             node_types,
             node_types_reverse,
+            node_property_keys,
+            node_property_keys_reverse,
             node_properties: self.node_properties,
         };
         let edge_metadata = EdgeMetadata {
             edge_types,
             edge_types_reverse,
+            edge_property_keys,
+            edge_property_keys_reverse,
             edge_properties: self.edge_properties,
         };
         let graph_metadata = GraphMetadata {
