@@ -5,6 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use mimalloc::MiMalloc;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
@@ -28,6 +29,10 @@ use hetnet::{
     },
     deduplication as dedup
 };
+
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
