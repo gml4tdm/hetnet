@@ -44,6 +44,10 @@ def to_igraph_graph(g: core.Graph) -> igraph.Graph:
     return ig
 
 
+def to_igraph_and_mapping(g: core.Graph) -> tuple[igraph.Graph, dict[core.NodeRef, int]]:
+    return _to_igraph_graph(g)
+
+
 def _to_igraph_graph(g: core.Graph):
     components, mapper = _to_igraph_components(g)
     return from_igraph_components(components), mapper

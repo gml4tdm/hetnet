@@ -55,9 +55,15 @@ class GraphBuilder:
 class Graph:
 
     def __init__(self,
-                 base_graph: _hetnet.Graph, *,
+                 base_graph: _hetnet.Graph | typing.Self, *,
                  index: str | list[str] | tuple[str, ...] | None = None):
-        self._graph = base_graph
+        # We allow construction from both the internal and public graph,
+        # to faccilitate sub-classing
+        if isinstance(base_graph, Graph):
+            assert not isinstance(base_graph, _hetnet.Graph)
+            self._graph = base_graph._graph
+        else:
+            self._graph = base_graph
         self._cache = {}
         if index is None:
             self._index = _GraphIndex(mapping={}, key=())
